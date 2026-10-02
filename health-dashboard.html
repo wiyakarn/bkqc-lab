@@ -1,0 +1,587 @@
+<title>สมุดผลตรวจสุขภาพ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap">
+<style>
+/* Layout: summary band on top, marker cards grouped by body system (left), sticky detail + trend + advice panel (right). */
+:root{
+  --bg:#F2F6F6; --surface:#FFFFFF; --surface2:#F7FAFA; --ink:#11292B; --ink2:#4B6466; --line:#D6E1E1;
+  --accent:#0C7C86; --accent-ink:#FFFFFF; --accent-soft:#DCF0F1;
+  --good:#1B8449; --good-bg:#DDF2E5; --warn:#A8690B; --warn-bg:#FBEBCB; --bad:#C0352D; --bad-bg:#FADAD6;
+  --band:rgba(27,132,73,.12);
+  --f-display:'Anuphan','Noto Sans Thai',system-ui,sans-serif; --f-body:'Noto Sans Thai','Anuphan',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D1819; --surface:#152325; --surface2:#112022; --ink:#E3EEEE; --ink2:#9CB3B5; --line:#26393B;
+  --accent:#4EC4CD; --accent-ink:#06191B; --accent-soft:#163A3E;
+  --good:#58C686; --good-bg:#173A29; --warn:#E3AB4D; --warn-bg:#403115; --bad:#F2796F; --bad-bg:#47201D;
+  --band:rgba(88,198,134,.14); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D1819; --surface:#152325; --surface2:#112022; --ink:#E3EEEE; --ink2:#9CB3B5; --line:#26393B;
+  --accent:#4EC4CD; --accent-ink:#06191B; --accent-soft:#163A3E;
+  --good:#58C686; --good-bg:#173A29; --warn:#E3AB4D; --warn-bg:#403115; --bad:#F2796F; --bad-bg:#47201D;
+  --band:rgba(88,198,134,.14); color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:400 15px/1.6 var(--f-body);margin:0;padding-inline:16px;padding-block:20px 64px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3,h4{font-family:var(--f-display);margin:0;text-wrap:balance;line-height:1.3}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--ink2)}
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:10px;font-weight:500}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+.btn.sm{padding:4px 10px;font-size:13px}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between}
+.top h1{font-size:26px}
+.top p{margin:2px 0 0}
+.demo{background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.demo b{font-weight:600}
+
+/* summary */
+.summary{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:20px}
+.summary h2{font-size:16px;color:var(--ink2);font-weight:600}
+.sum-date{font:600 24px/1.3 var(--f-display)}
+.bar{display:flex;height:14px;border-radius:7px;overflow:hidden;gap:2px;margin:12px 0 8px}
+.bar i{display:block;min-width:4px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.c-good{background:var(--good)} .c-warn{background:var(--warn)} .c-bad{background:var(--bad)}
+.attn{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{border:1px solid var(--line);background:var(--surface2);border-radius:999px;padding:3px 12px;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+.chip.warn{background:var(--warn-bg);border-color:transparent;color:var(--warn)}
+.chip.bad{background:var(--bad-bg);border-color:transparent;color:var(--bad)}
+.chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+/* main */
+.main{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;align-items:start}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.group{margin-bottom:20px}
+.group h3{font-size:14px;font-weight:600;color:var(--ink2);letter-spacing:.02em;margin-bottom:8px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.card{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 12px 10px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.card:hover{border-color:var(--accent)}
+.card[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.card .nm{font-size:13px;color:var(--ink2);line-height:1.35;min-height:2.7em}
+.card .val{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.card .val b{font:600 26px/1.1 var(--f-display)}
+.card .val small{color:var(--ink2);font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill.good{background:var(--good-bg);color:var(--good)} .pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.bad{background:var(--bad-bg);color:var(--bad)}
+.delta{font-size:12px;color:var(--ink2)}
+.rng{position:relative;display:flex;height:6px;border-radius:3px;overflow:hidden;gap:1px;margin-top:2px}
+.rng-wrap{position:relative;padding-top:4px}
+.rng i{display:block}
+.rng .b{background:var(--bad);opacity:.35} .rng .w{background:var(--warn);opacity:.4} .rng .g{background:var(--good);opacity:.55}
+.rng-pin{position:absolute;top:0;width:3px;height:14px;border-radius:2px;background:var(--ink);transform:translateX(-50%)}
+.spark{width:100%;height:auto;display:block}
+
+/* detail */
+.detail{position:sticky;top:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.detail h2{font-size:20px}
+.dhead{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start}
+.dval{font:600 34px/1.1 var(--f-display)}
+.dval small{font:400 14px var(--f-body);color:var(--ink2);margin-left:6px}
+.box{background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.box h4{font-size:14px;margin-bottom:6px}
+.box ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.chart{position:relative}
+.chart svg{width:100%;height:auto;display:block;touch-action:pan-y}
+.ax{fill:var(--ink2);font:11px var(--f-body)}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:8px;padding:5px 9px;font-size:12px;white-space:nowrap;transform:translate(-50%,-110%);z-index:2}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--ink2);font-weight:500}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap}
+.thumbs img{width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
+.ai{white-space:normal;line-height:1.7}
+.ai h4{margin:12px 0 4px;font-size:15px;color:var(--accent)}
+.ai ul{margin:4px 0;padding-left:20px}
+.ai p{margin:4px 0}
+.note{font-size:12px;color:var(--ink2)}
+.err{color:var(--bad);font-size:13px}
+
+/* overall analysis */
+.overall{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.overall .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.field{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink2)}
+input[type=number],input[type=date],select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px;min-width:0}
+input[type=number]{width:90px}
+
+/* checkup list */
+.hist{display:flex;flex-wrap:wrap;gap:8px}
+.hist .chip button{border:0;background:none;color:var(--bad);padding:0 2px;font-size:12px;text-decoration:underline}
+
+/* add panel */
+.overlay{position:fixed;inset:0;background:rgba(5,15,16,.55);z-index:20;overflow-y:auto;padding:16px;padding-top:calc(16px + env(safe-area-inset-top,0px));padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+.sheet{background:var(--bg);border:1px solid var(--line);border-radius:16px;max-width:860px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+.sheet h2{font-size:20px}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:18px;text-align:center;background:var(--surface);display:flex;flex-direction:column;gap:10px;align-items:center}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.prev{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.prev img{height:90px;border-radius:8px;border:1px solid var(--line);max-width:100%}
+.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px 16px}
+.form label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.form label span{min-width:0}
+.form label small{color:var(--ink2);display:block;font-size:11px}
+.form input{width:92px;text-align:right}
+.form label.read{border-color:var(--accent);background:var(--accent-soft)}
+.sheet .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.disc{font-size:12px;color:var(--ink2)}
+
+@media (max-width:900px){
+  .summary{grid-template-columns:1fr}
+  .main{grid-template-columns:1fr}
+  .detail{position:static}
+}
+@media (prefers-reduced-motion:no-preference){.card{transition:border-color .15s}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>สมุดผลตรวจสุขภาพ</h1>
+      <p class="muted">ติดตามค่าเลือดและค่าร่างกายแต่ละปี ดูแนวโน้ม และรับคำอธิบายพร้อมแนวทางป้องกันเบื้องต้น</p>
+    </div>
+    <button class="btn primary" id="openAdd" type="button">+ เพิ่มผลตรวจ</button>
+  </header>
+
+  <div class="demo" id="demoBar" hidden>
+    <span><b>ข้อมูลตัวอย่าง</b> ตัวเลขด้านล่างเป็นตัวอย่างสมมติ ไม่ใช่ผลตรวจของคุณ</span>
+    <button class="btn sm" id="demoAdd" type="button">บันทึกผลตรวจจริงของฉัน</button>
+  </div>
+
+  <section class="summary" aria-label="สรุปผลตรวจล่าสุด">
+    <div>
+      <h2>ผลตรวจล่าสุด</h2>
+      <div class="sum-date" id="sumDate">-</div>
+      <div class="muted" id="sumSub"></div>
+      <div class="bar" id="sumBar" role="img" aria-label="สัดส่วนผลตรวจ"></div>
+      <div class="legend" id="sumLegend"></div>
+    </div>
+    <div>
+      <h2>ค่าที่ควรใส่ใจ</h2>
+      <div class="attn" id="attn"></div>
+      <div class="note" style="margin-top:10px">กดที่ค่าเพื่อดูแนวโน้มและแนวทางป้องกัน</div>
+    </div>
+  </section>
+
+  <div class="main">
+    <section aria-label="รายการค่าตรวจ">
+      <div class="filters" id="filters"></div>
+      <div id="groups"></div>
+    </section>
+    <aside class="detail" id="detail" aria-live="polite"></aside>
+  </div>
+
+  <section class="overall" aria-label="วิเคราะห์ภาพรวม">
+    <h2>วิเคราะห์ภาพรวมและแนวทางป้องกัน</h2>
+    <div class="row">
+      <label class="field" for="age">อายุ <input type="number" id="age" min="1" max="120" inputmode="numeric"> ปี</label>
+      <label class="field" for="sex">เพศ
+        <select id="sex"><option value="">ไม่ระบุ</option><option value="หญิง">หญิง</option><option value="ชาย">ชาย</option></select>
+      </label>
+      <button class="btn primary" id="runAll" type="button">ให้ Claude วิเคราะห์ทุกค่า</button>
+      <button class="btn" id="stopAll" type="button" hidden>หยุด</button>
+    </div>
+    <div class="ai" id="aiAll"><span class="muted">กดปุ่มเพื่อให้ Claude สรุปแนวโน้มทุกค่า ความเสี่ยงที่ควรระวัง และแผนดูแลตัวเอง</span></div>
+    <div class="disc">คำวิเคราะห์ใช้เพื่อความเข้าใจเบื้องต้น ไม่ใช่การวินิจฉัยโรค ค่าอ้างอิงแตกต่างกันตามห้องปฏิบัติการ อายุ และเพศ โปรดปรึกษาแพทย์เพื่อแปลผลที่แน่นอน</div>
+  </section>
+
+  <section aria-label="ประวัติการตรวจ">
+    <h3 style="font-size:14px;margin-bottom:8px" class="muted">ประวัติการตรวจที่บันทึกไว้</h3>
+    <div class="hist" id="hist"></div>
+  </section>
+</div>
+
+<div class="overlay" id="addOv" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="addTitle">
+    <div class="row"><h2 id="addTitle">เพิ่มผลตรวจ</h2><button class="btn sm" id="closeAdd" type="button">ปิด</button></div>
+    <div class="drop" id="drop">
+      <div><b>ใส่ภาพใบผลตรวจ</b><div class="muted" style="font-size:13px">ลากไฟล์มาวาง หรือเลือกไฟล์ (JPG, PNG, WebP) ใส่ได้หลายหน้า</div></div>
+      <input type="file" id="files" accept="image/*" multiple>
+      <div class="prev" id="prev"></div>
+      <button class="btn primary" id="readImg" type="button" disabled>ให้ Claude อ่านค่าจากภาพ</button>
+      <div class="note" id="readMsg"></div>
+    </div>
+    <div class="row" style="justify-content:flex-start">
+      <label class="field" for="fdate">วันที่ตรวจ <input type="date" id="fdate"></label>
+    </div>
+    <div class="note">ตรวจทานค่าที่อ่านได้ (ช่องสีฟ้า) แก้ไขได้ และเว้นว่างค่าที่ไม่มีในใบผลตรวจ</div>
+    <div id="formGroups"></div>
+    <label class="field" for="fnote" style="align-items:flex-start;flex-direction:column;gap:4px">หมายเหตุ (ถ้ามี)
+      <textarea id="fnote" rows="2" style="width:100%"></textarea></label>
+    <div class="row">
+      <span class="err" id="saveMsg"></span>
+      <button class="btn primary" id="saveRec" type="button">บันทึกผลตรวจ</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+/* ---------- marker catalogue ---------- */
+// nr = normal range [lo,hi] (null = open), wr = borderline outer limits, ax = chart axis for range bar
+var M=[
+{k:'fbs',g:'น้ำตาลในเลือด',t:'น้ำตาลหลังอดอาหาร (FBS)',u:'mg/dL',nr:[70,99],wr:[60,125],ax:[50,160],dp:0,d:'ระดับน้ำตาลในเลือดหลังอดอาหารอย่างน้อย 8 ชั่วโมง 100–125 เรียกว่าภาวะก่อนเบาหวาน และ 126 ขึ้นไปเข้าข่ายเบาหวาน'},
+{k:'hba1c',g:'น้ำตาลในเลือด',t:'น้ำตาลสะสม (HbA1c)',u:'%',nr:[null,5.6],wr:[null,6.4],ax:[4,8],dp:1,d:'สะท้อนค่าน้ำตาลเฉลี่ยย้อนหลังประมาณ 3 เดือน 5.7–6.4% คือก่อนเบาหวาน ตั้งแต่ 6.5% เข้าข่ายเบาหวาน'},
+{k:'chol',g:'ไขมันในเลือด',t:'คอเลสเตอรอลรวม',u:'mg/dL',nr:[null,199],wr:[null,239],ax:[100,300],dp:0,d:'ไขมันทั้งหมดในเลือด ควรต่ำกว่า 200 mg/dL'},
+{k:'ldl',g:'ไขมันในเลือด',t:'LDL (ไขมันไม่ดี)',u:'mg/dL',nr:[null,129],wr:[null,159],ax:[50,220],dp:0,d:'ไขมันที่สะสมในผนังหลอดเลือด ยิ่งสูงยิ่งเสี่ยงหลอดเลือดหัวใจและสมอง ผู้มีความเสี่ยงสูงอาจต้องคุมให้ต่ำกว่านี้'},
+{k:'hdl',g:'ไขมันในเลือด',t:'HDL (ไขมันดี)',u:'mg/dL',nr:[40,null],wr:[30,null],ax:[20,90],dp:0,d:'ช่วยพาไขมันออกจากผนังหลอดเลือด ยิ่งสูงยิ่งดี ผู้หญิงควรเกิน 50 mg/dL'},
+{k:'tg',g:'ไขมันในเลือด',t:'ไตรกลีเซอไรด์',u:'mg/dL',nr:[null,149],wr:[null,199],ax:[40,300],dp:0,d:'ไขมันที่ขึ้นกับอาหารหวาน แป้ง และแอลกอฮอล์ ควรเจาะหลังอดอาหาร 9–12 ชั่วโมง'},
+{k:'crea',g:'ไต',t:'ครีอะตินีน (Creatinine)',u:'mg/dL',nr:[0.6,1.2],wr:[0.5,1.5],ax:[0.3,2],dp:2,d:'ของเสียจากกล้ามเนื้อที่ไตกรองออก ค่าสูงอาจหมายถึงไตทำงานลดลง'},
+{k:'egfr',g:'ไต',t:'อัตราการกรองของไต (eGFR)',u:'mL/min/1.73m²',nr:[90,null],wr:[60,null],ax:[30,130],dp:0,d:'ประมาณการประสิทธิภาพการกรองของไต ต่ำกว่า 60 ต่อเนื่อง 3 เดือนเข้าข่ายโรคไตเรื้อรัง'},
+{k:'alt',g:'ตับ',t:'เอนไซม์ตับ ALT (SGPT)',u:'U/L',nr:[null,40],wr:[null,80],ax:[0,120],dp:0,d:'เอนไซม์ที่พบมากในเซลล์ตับ ค่าสูงบ่งชี้ว่าเซลล์ตับอักเสบหรือถูกทำลาย เช่น ไขมันพอกตับ แอลกอฮอล์ ยาบางชนิด'},
+{k:'ast',g:'ตับ',t:'เอนไซม์ตับ AST (SGOT)',u:'U/L',nr:[null,40],wr:[null,80],ax:[0,120],dp:0,d:'พบในตับ หัวใจ และกล้ามเนื้อ ใช้ดูร่วมกับ ALT'},
+{k:'ua',g:'กรดยูริก',t:'กรดยูริก (Uric acid)',u:'mg/dL',nr:[3.5,7.2],wr:[2.5,8.5],ax:[2,11],dp:1,d:'ค่าสูงเสี่ยงโรคเก๊าท์และนิ่วในไต'},
+{k:'hb',g:'เม็ดเลือด',t:'ฮีโมโกลบิน (Hb)',u:'g/dL',nr:[12,17],wr:[10,18],ax:[7,20],dp:1,d:'โปรตีนนำออกซิเจนในเม็ดเลือดแดง ค่าต่ำคือภาวะโลหิตจาง ผู้ชายปกติสูงกว่าผู้หญิงเล็กน้อย'},
+{k:'bmi',g:'ร่างกาย',t:'ดัชนีมวลกาย (BMI)',u:'kg/m²',nr:[18.5,22.9],wr:[17,24.9],ax:[15,34],dp:1,d:'เกณฑ์คนเอเชีย 18.5–22.9 ปกติ 23–24.9 น้ำหนักเกิน ตั้งแต่ 25 เข้าข่ายอ้วน'},
+{k:'sbp',g:'ร่างกาย',t:'ความดันตัวบน (SBP)',u:'mmHg',nr:[90,129],wr:[85,139],ax:[70,180],dp:0,d:'แรงดันขณะหัวใจบีบตัว ตั้งแต่ 140 ขึ้นไปเข้าข่ายความดันโลหิตสูง'},
+{k:'dbp',g:'ร่างกาย',t:'ความดันตัวล่าง (DBP)',u:'mmHg',nr:[60,84],wr:[55,89],ax:[40,110],dp:0,d:'แรงดันขณะหัวใจคลายตัว ตั้งแต่ 90 ขึ้นไปเข้าข่ายความดันโลหิตสูง'}
+];
+var MK={}; M.forEach(function(m){MK[m.k]=m});
+var GROUPS=[]; M.forEach(function(m){if(GROUPS.indexOf(m.g)<0)GROUPS.push(m.g)});
+
+var TIP_SUGAR=['ลดน้ำตาล เครื่องดื่มหวาน และข้าวขาว/แป้งปริมาณมาก เพิ่มผักและโปรตีน','ออกกำลังกายระดับปานกลาง เช่น เดินเร็ว อย่างน้อย 150 นาทีต่อสัปดาห์','ถ้าน้ำหนักเกิน การลดน้ำหนัก 5–7% ช่วยลดความเสี่ยงเบาหวานได้ชัดเจน','ตรวจซ้ำทุก 3–6 เดือน และพบแพทย์หากค่าเข้าเกณฑ์เบาหวาน'];
+var TIPS={
+ fbs:{hi:TIP_SUGAR,lo:['ไม่อดอาหารนาน พกของว่างที่มีน้ำตาลเมื่อมีอาการใจสั่น เหงื่อแตก','พบแพทย์หากเกิดอาการบ่อยหรือใช้ยาเบาหวานอยู่']},
+ hba1c:{hi:TIP_SUGAR,lo:['พบแพทย์เพื่อหาสาเหตุ เช่น โลหิตจางบางชนิดที่ทำให้ค่าคลาดเคลื่อน']},
+ chol:{hi:['ลดไขมันอิ่มตัว ของทอด กะทิ หนังสัตว์ เนื้อติดมัน','เพิ่มผัก ผลไม้ ธัญพืชไม่ขัดสี และปลาที่มีโอเมก้า-3','ออกกำลังกายสม่ำเสมอ และควบคุมน้ำหนัก']},
+ ldl:{hi:['ลดไขมันอิ่มตัวและไขมันทรานส์ (เบเกอรี่ ครีมเทียม ของทอดซ้ำ)','เพิ่มใยอาหารละลายน้ำ เช่น ข้าวโอ๊ต ถั่ว ผักผลไม้','ผู้มีเบาหวาน ความดัน หรือประวัติหัวใจ ควรปรึกษาแพทย์เรื่องเป้าหมายและการใช้ยา']},
+ hdl:{lo:['ออกกำลังกายแอโรบิกสม่ำเสมอ','เลิกบุหรี่ และลดแอลกอฮอล์','เลือกไขมันดี เช่น ปลา ถั่ว น้ำมันมะกอก และควบคุมน้ำหนัก']},
+ tg:{hi:['ลดน้ำตาล ของหวาน น้ำผลไม้ และแอลกอฮอล์','กินปลาทะเลสัปดาห์ละ 2 ครั้ง','ออกกำลังกาย และเจาะเลือดหลังอดอาหารเพื่อให้ค่าแม่นยำ']},
+ crea:{hi:['ดื่มน้ำให้เพียงพอ ลดอาหารเค็มและโปรตีนสูงเกินไป','เลี่ยงยาแก้ปวดกลุ่ม NSAIDs และยาสมุนไพรที่ไม่ทราบที่มา','ควบคุมความดันและน้ำตาล แล้วตรวจซ้ำพร้อมโปรตีนในปัสสาวะ'],lo:['มักไม่น่ากังวล อาจพบในผู้มีมวลกล้ามเนื้อน้อย']},
+ egfr:{lo:['ควบคุมความดันและน้ำตาลให้ได้ตามเป้า','ลดเกลือ เลี่ยงยา NSAIDs และอาหารเสริมที่ไม่จำเป็น','ตรวจซ้ำและพบแพทย์เพื่อประเมินโรคไตเรื้อรัง']},
+ alt:{hi:['งดแอลกอฮอล์ชั่วคราว','ลดน้ำหนัก ลดของหวานและของทอด เพื่อลดไขมันพอกตับ','ระวังยา อาหารเสริม สมุนไพร ที่ทำให้ตับอักเสบ','ตรวจซ้ำใน 1–2 เดือน และพิจารณาตรวจไวรัสตับอักเสบ B/C']},
+ ast:{hi:['งดแอลกอฮอล์และพักการออกกำลังกายหนักก่อนเจาะเลือด','ดูแลเรื่องไขมันพอกตับเช่นเดียวกับ ALT','หากสูงต่อเนื่องควรพบแพทย์']},
+ ua:{hi:['ลดเครื่องในสัตว์ ซุปกระดูก อาหารทะเลบางชนิด เบียร์ และน้ำหวาน','ดื่มน้ำอย่างน้อย 2 ลิตรต่อวัน','ลดน้ำหนักอย่างค่อยเป็นค่อยไป','พบแพทย์หากปวดข้อ บวมแดง หรือเคยเป็นนิ่ว'],lo:['มักไม่มีอันตราย ปรึกษาแพทย์หากต่ำมากต่อเนื่อง']},
+ hb:{lo:['เพิ่มอาหารที่มีธาตุเหล็ก เช่น เนื้อแดง ตับ ผักใบเขียวเข้ม คู่กับวิตามินซี','เลี่ยงชา กาแฟหลังมื้ออาหาร','พบแพทย์เพื่อหาสาเหตุ เช่น เสียเลือดเรื้อรัง ประจำเดือนมาก'],hi:['ดื่มน้ำให้เพียงพอ','พบแพทย์หากสูงต่อเนื่อง']},
+ bmi:{hi:['ลดพลังงานวันละ 300–500 กิโลแคลอรี และลดเครื่องดื่มหวาน','ออกกำลังกาย เช่น เดินเร็ว ว่ายน้ำ 150 นาทีต่อสัปดาห์ ร่วมกับฝึกกล้ามเนื้อ','นอน 7–8 ชั่วโมง ลดความเครียด'],lo:['เพิ่มโปรตีนและพลังงานจากอาหารครบหมู่','ตรวจหาสาเหตุหากน้ำหนักลดโดยไม่ตั้งใจ']},
+ sbp:{hi:['ลดเกลือและโซเดียม ไม่เกิน 2,000 mg ต่อวัน (ประมาณเกลือ 1 ช้อนชา)','เลือกอาหารแบบ DASH: ผัก ผลไม้ นมไขมันต่ำ','วัดความดันที่บ้านตอนเช้า-เย็น จดบันทึก','ลดน้ำหนัก ลดแอลกอฮอล์ งดบุหรี่','ความดันตั้งแต่ 140/90 ซ้ำหลายครั้ง ควรพบแพทย์'],lo:['ลุกยืนช้า ๆ ดื่มน้ำให้พอ','พบแพทย์หากเวียนหัว หน้ามืด หรือเป็นลม']},
+ dbp:{hi:['ลดเกลือและอาหารแปรรูป','ออกกำลังกายสม่ำเสมอ และจัดการความเครียด','วัดความดันที่บ้านและพบแพทย์หากค่าสูงต่อเนื่อง'],lo:['ดื่มน้ำให้พอ และพบแพทย์หากมีอาการเวียนหัว']}
+};
+
+/* ---------- demo data (example only) ---------- */
+function demoRec(date,v){var o={};['fbs','hba1c','chol','ldl','hdl','tg','crea','egfr','alt','ast','ua','hb','bmi','sbp','dbp'].forEach(function(k,i){o[k]=v[i]});return {id:'demo-'+date,date:date,values:o,demo:true,note:'ตัวอย่าง',imageIds:[]}}
+var DEMO=[
+ demoRec('2023-03-14',[92,5.3,190,118,52,120,0.9,94,28,24,6.1,14.2,23.4,118,76]),
+ demoRec('2024-03-20',[98,5.5,205,132,49,142,0.9,92,34,27,6.5,14.0,24.1,124,80]),
+ demoRec('2025-03-18',[106,5.8,218,145,46,165,1.0,89,44,31,7.0,14.1,25.0,128,82]),
+ demoRec('2026-03-12',[112,6.0,226,152,44,178,1.0,87,52,35,7.6,13.9,25.6,134,86])
+];
+
+/* ---------- helpers ---------- */
+function $(id){return document.getElementById(id)}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function fmt(m,v){return Number(v).toFixed(m.dp)}
+function dateTh(d,short){try{return new Date(d+'T00:00:00').toLocaleDateString('th-TH',short?{month:'short',year:'2-digit'}:{day:'numeric',month:'short',year:'numeric'})}catch(e){return d}}
+function inR(r,v){return (r[0]==null||v>=r[0])&&(r[1]==null||v<=r[1])}
+function status(m,v){return inR(m.nr,v)?'good':inR(m.wr,v)?'warn':'bad'}
+function side(m,v){return m.nr[0]!=null&&v<m.nr[0]?'lo':m.nr[1]!=null&&v>m.nr[1]?'hi':'ok'}
+var ST={good:{t:'ปกติ',i:'✓'},warn:{t:'เฝ้าระวัง',i:'!'},bad:{t:'ผิดปกติ',i:'▲'}};
+function pill(m,v){var s=status(m,v),sd=side(m,v);var lab=s==='good'?'ปกติ':(sd==='hi'?(s==='warn'?'สูงเล็กน้อย':'สูง'):(s==='warn'?'ต่ำเล็กน้อย':'ต่ำ'));return '<span class="pill '+s+'"><span aria-hidden="true">'+ST[s].i+'</span>'+lab+'</span>'}
+function refText(m){var a=m.nr[0],b=m.nr[1];return a==null?'≤ '+b:b==null?'≥ '+a:a+'–'+b}
+function distOut(m,v){var a=m.nr[0],b=m.nr[1],span=(m.ax[1]-m.ax[0]);if(a!=null&&v<a)return (a-v)/span;if(b!=null&&v>b)return (v-b)/span;return 0}
+
+/* ---------- state ---------- */
+var recs=DEMO.slice(), mode='demo', col=null, selected='fbs', filter='all', assets=null, sample=null, canImg=false;
+var profile={age:'',sex:''};
+try{var p=JSON.parse(localStorage.getItem('hd_profile')||'{}');profile.age=p.age||'';profile.sex=p.sex||''}catch(e){}
+
+function sorted(){return recs.slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0})}
+function series(k){return sorted().filter(function(r){return r.values&&r.values[k]!=null}).map(function(r){return {t:+new Date(r.date+'T00:00:00'),date:r.date,v:+r.values[k],r:r}})}
+function latestVals(){var o={};M.forEach(function(m){var s=series(m.k);if(s.length)o[m.k]=s[s.length-1]});return o}
+
+/* ---------- charts ---------- */
+function rangeBar(m,v){
+  var a=m.ax[0],b=m.ax[1],n0=m.nr[0],n1=m.nr[1],w0=m.wr[0],w1=m.wr[1];
+  var cl=function(x){return Math.max(a,Math.min(b,x))};
+  var pts=[a,cl(w0==null?a:w0),cl(n0==null?a:n0),cl(n1==null?b:n1),cl(w1==null?b:w1),b];
+  var cls=['b','w','g','w','b'],h='';
+  for(var i=0;i<5;i++){var wd=(pts[i+1]-pts[i])/(b-a)*100;if(wd>0)h+='<i class="'+cls[i]+'" style="width:'+wd+'%"></i>'}
+  var pos=Math.max(2,Math.min(98,(v-a)/(b-a)*100));
+  return '<div class="rng-wrap" aria-hidden="true"><div class="rng">'+h+'</div><span class="rng-pin" style="left:'+pos+'%"></span></div>';
+}
+function scaleY(m,pts,H,pt,pb){
+  var vs=pts.map(function(p){return p.v}),lo=Math.min.apply(null,vs),hi=Math.max.apply(null,vs);
+  if(m.nr[0]!=null)lo=Math.min(lo,m.nr[0]);if(m.nr[1]!=null)hi=Math.max(hi,m.nr[1]);
+  var pad=(hi-lo||1)*.15;lo-=pad;hi+=pad;
+  return {lo:lo,hi:hi,y:function(v){return pt+(hi-v)/(hi-lo)*(H-pt-pb)}};
+}
+function sparkline(m,pts){
+  var W=140,H=36,sy=scaleY(m,pts,H,5,5),n=pts.length,t0=pts[0].t,t1=pts[n-1].t;
+  var x=function(p){return n===1?W/2:6+(p.t-t0)/(t1-t0)*(W-12)};
+  var b0=m.nr[0]==null?sy.lo:m.nr[0],b1=m.nr[1]==null?sy.hi:m.nr[1];
+  var band='<rect x="0" y="'+sy.y(Math.min(b1,sy.hi))+'" width="'+W+'" height="'+Math.max(1,sy.y(Math.max(b0,sy.lo))-sy.y(Math.min(b1,sy.hi)))+'" fill="var(--band)"/>';
+  var d=pts.map(function(p,i){return (i?'L':'M')+x(p).toFixed(1)+' '+sy.y(p.v).toFixed(1)}).join('');
+  var last=pts[n-1],s=status(m,last.v);
+  return '<svg class="spark" viewBox="0 0 '+W+' '+H+'" aria-hidden="true">'+band+(n>1?'<path d="'+d+'" fill="none" stroke="var(--ink2)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>':'')+'<circle cx="'+x(last).toFixed(1)+'" cy="'+sy.y(last.v).toFixed(1)+'" r="4" fill="var(--'+s+')" stroke="var(--surface)" stroke-width="2"/></svg>';
+}
+function bigChart(m,pts){
+  var W=640,H=250,L=48,R=30,T=14,B=30,sy=scaleY(m,pts,H,T,B),n=pts.length,t0=pts[0].t,t1=pts[n-1].t;
+  var x=function(p){return n===1?(L+W-R)/2:L+(p.t-t0)/(t1-t0)*(W-L-R)};
+  var s='<svg id="bigsvg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="กราฟแนวโน้ม '+esc(m.t)+'">';
+  for(var i=0;i<=4;i++){var v=sy.lo+(sy.hi-sy.lo)*i/4,yy=sy.y(v);s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+yy+'" y2="'+yy+'" stroke="var(--line)" stroke-width="1"/><text class="ax" x="'+(L-6)+'" y="'+(yy+4)+'" text-anchor="end">'+(m.dp?v.toFixed(1):Math.round(v))+'</text>'}
+  var b0=m.nr[0]==null?sy.lo:Math.max(m.nr[0],sy.lo),b1=m.nr[1]==null?sy.hi:Math.min(m.nr[1],sy.hi);
+  s+='<rect x="'+L+'" y="'+sy.y(b1)+'" width="'+(W-L-R)+'" height="'+Math.max(1,sy.y(b0)-sy.y(b1))+'" fill="var(--band)"/><text class="ax" x="'+(W-R-4)+'" y="'+(sy.y(b1)+12)+'" text-anchor="end" style="fill:var(--good)">ช่วงปกติ '+refText(m)+'</text>';
+  var step=Math.ceil(n/7);
+  pts.forEach(function(p,i){if(i%step===0||i===n-1)s+='<text class="ax" x="'+x(p)+'" y="'+(H-8)+'" text-anchor="middle">'+dateTh(p.date,true)+'</text>'});
+  if(n>1)s+='<path d="'+pts.map(function(p,i){return (i?'L':'M')+x(p).toFixed(1)+' '+sy.y(p.v).toFixed(1)}).join('')+'" fill="none" stroke="var(--ink2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+  pts.forEach(function(p,i){var last=i===n-1;s+='<circle cx="'+x(p)+'" cy="'+sy.y(p.v)+'" r="'+(last?6:4.5)+'" fill="var(--'+status(m,p.v)+')" stroke="var(--surface)" stroke-width="2"/>';
+    if(last||n<=6)s+='<text class="ax" x="'+x(p)+'" y="'+(sy.y(p.v)-11)+'" text-anchor="middle" style="fill:var(--ink);font-weight:600">'+fmt(m,p.v)+'</text>'});
+  s+='<line id="xh" x1="0" x2="0" y1="'+T+'" y2="'+(H-B)+'" stroke="var(--ink2)" stroke-dasharray="3 3" visibility="hidden"/></svg><div class="tip" id="tip" hidden></div>';
+  return {html:s,x:x,W:W};
+}
+function bindHover(m,pts,c){
+  var svg=$('bigsvg'),tip=$('tip'),xh=$('xh');if(!svg)return;
+  function move(e){var r=svg.getBoundingClientRect(),px=(e.clientX-r.left)/r.width*c.W,best=null,bd=1e9;
+    pts.forEach(function(p){var d=Math.abs(c.x(p)-px);if(d<bd){bd=d;best=p}});
+    if(!best)return;xh.setAttribute('x1',c.x(best));xh.setAttribute('x2',c.x(best));xh.setAttribute('visibility','visible');
+    tip.hidden=false;tip.textContent=dateTh(best.date)+' · '+fmt(m,best.v)+' '+m.u;
+    tip.style.left=(c.x(best)/c.W*r.width)+'px';tip.style.top=(e.clientY-r.top)+'px'}
+  svg.addEventListener('pointermove',move);svg.addEventListener('pointerdown',move);
+  svg.addEventListener('pointerleave',function(){tip.hidden=true;xh.setAttribute('visibility','hidden')});
+}
+
+/* ---------- render: summary / cards ---------- */
+function renderSummary(){
+  var lv=latestVals(),keys=Object.keys(lv),cnt={good:0,warn:0,bad:0};
+  var rs=sorted(),last=rs[rs.length-1];
+  $('sumDate').textContent=last?dateTh(last.date):'-';
+  $('sumSub').textContent=rs.length?'ตรวจแล้ว '+rs.length+' ครั้ง · ค่าล่าสุด '+keys.length+' รายการ':'ยังไม่มีผลตรวจ';
+  var att=[];
+  keys.forEach(function(k){var s=status(MK[k],lv[k].v);cnt[s]++;if(s!=='good')att.push({k:k,s:s})});
+  att.sort(function(a,b){return (a.s==='bad'?0:1)-(b.s==='bad'?0:1)});
+  var tot=keys.length||1;
+  $('sumBar').innerHTML=['good','warn','bad'].map(function(s){return cnt[s]?'<i class="c-'+s+'" style="flex:'+cnt[s]+'"></i>':''}).join('');
+  $('sumLegend').innerHTML=['good','warn','bad'].map(function(s){return '<span><span class="dot c-'+s+'"></span>'+ST[s].t+' <b class="num">'+cnt[s]+'</b></span>'}).join('');
+  $('attn').innerHTML=att.length?att.map(function(a){var m=MK[a.k];return '<button class="chip '+a.s+'" data-k="'+a.k+'" type="button">'+esc(m.t)+' <b class="num">'+fmt(m,lv[a.k].v)+'</b></button>'}).join(''):'<span class="muted">ทุกค่าที่ตรวจอยู่ในเกณฑ์ปกติ</span>';
+}
+function renderFilters(){
+  var f=[['all','ทั้งหมด']].concat([['attn','ต้องใส่ใจ']]);
+  $('filters').innerHTML=f.map(function(x){return '<button class="chip'+(filter===x[0]?' on':'')+'" data-f="'+x[0]+'" type="button">'+x[1]+'</button>'}).join('');
+}
+function deltaText(m,s){
+  if(s.length<2)return '';
+  var a=s[s.length-2].v,b=s[s.length-1].v,d=b-a;
+  if(Math.abs(d)<Math.pow(10,-m.dp)/2)return 'เท่าเดิม';
+  var da=distOut(m,a),db=distOut(m,b),verdict;
+  if(da===0&&db===0)verdict='อยู่ในเกณฑ์';else verdict=db<da?'ดีขึ้น':'ควรระวัง';
+  return (d>0?'▲ +':'▼ ')+Math.abs(d).toFixed(m.dp)+' · '+verdict;
+}
+function renderCards(){
+  var lv=latestVals(),h='';
+  GROUPS.forEach(function(g){
+    var cs=M.filter(function(m){return m.g===g&&lv[m.k]&&(filter==='all'||status(m,lv[m.k].v)!=='good')});
+    if(!cs.length)return;
+    h+='<div class="group"><h3>'+esc(g)+'</h3><div class="cards">'+cs.map(function(m){
+      var s=series(m.k),p=lv[m.k];
+      return '<button class="card" type="button" data-k="'+m.k+'" aria-pressed="'+(selected===m.k)+'"><span class="nm">'+esc(m.t)+'</span>'+
+        '<span class="val"><b class="num">'+fmt(m,p.v)+'</b><small>'+esc(m.u)+'</small></span>'+
+        '<span>'+pill(m,p.v)+'</span>'+rangeBar(m,p.v)+sparkline(m,s)+
+        '<span class="delta num">'+(deltaText(m,s)||'วัดครั้งแรก')+'</span></button>';
+    }).join('')+'</div></div>';
+  });
+  $('groups').innerHTML=h||'<div class="box">ไม่มีค่าที่ตรงกับตัวกรอง</div>';
+}
+
+/* ---------- detail ---------- */
+var aiAbort=null;
+function renderDetail(){
+  var m=MK[selected],s=series(selected),el=$('detail');
+  if(!m||!s.length){el.innerHTML='<h2>เลือกค่าตรวจ</h2><div class="muted">กดการ์ดทางซ้ายเพื่อดูกราฟแนวโน้มและคำแนะนำ</div>';return}
+  var p=s[s.length-1],st=status(m,p.v),sd=side(m,p.v),c=bigChart(m,s);
+  var tips=(TIPS[m.k]||{})[sd==='ok'?'':sd];
+  var tipHtml=sd==='ok'?'<div class="box"><h4>รักษาให้คงที่</h4><ul><li>ค่านี้อยู่ในเกณฑ์ปกติ รักษาด้วยอาหารสมดุล ออกกำลังกายสม่ำเสมอ และตรวจซ้ำตามนัดทุกปี</li>'+
+     (deltaText(m,s).indexOf('ควรระวัง')>=0?'<li>แนวโน้มเริ่มขยับออกจากเดิม ควรเฝ้าติดตามในปีถัดไป</li>':'')+'</ul></div>':
+     '<div class="box"><h4>แนวทางป้องกันเบื้องต้น</h4><ul>'+(tips||['ปรึกษาแพทย์เพื่อประเมินเพิ่มเติม']).map(function(t){return '<li>'+esc(t)+'</li>'}).join('')+'</ul></div>';
+  var rows=s.slice().reverse().map(function(x){
+    var imgs=(x.r.imageIds||[]).map(function(id){return '<a href="/_blob/'+esc(id)+'" target="_blank" rel="noopener"><img src="/_blob/'+esc(id)+'" alt="ภาพผลตรวจ"></a>'}).join('');
+    return '<tr><td>'+dateTh(x.date)+'</td><td class="num"><b>'+fmt(m,x.v)+'</b> '+esc(m.u)+'</td><td>'+pill(m,x.v)+'</td><td><div class="thumbs">'+(imgs||'<span class="muted">-</span>')+'</div></td></tr>'}).join('');
+  el.innerHTML='<div class="dhead"><div><h2>'+esc(m.t)+'</h2><div class="muted">'+esc(m.g)+' · ค่าอ้างอิง '+refText(m)+' '+esc(m.u)+'</div></div>'+pill(m,p.v)+'</div>'+
+   '<div class="dval num">'+fmt(m,p.v)+'<small>'+esc(m.u)+' · '+dateTh(p.date)+'</small></div>'+
+   '<div class="chart">'+c.html+'</div>'+
+   '<div class="box"><h4>ค่านี้บอกอะไร</h4><div>'+esc(m.d)+'</div></div>'+tipHtml+
+   '<div class="row" style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn primary" id="runOne" type="button"'+(sample?'':' disabled')+'>ให้ Claude วิเคราะห์ค่านี้</button><button class="btn" id="stopOne" type="button" hidden>หยุด</button></div>'+
+   '<div class="ai" id="aiOne"></div>'+
+   '<div class="tbl"><table><thead><tr><th>วันที่</th><th>ค่า</th><th>สถานะ</th><th>ภาพผลตรวจ</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  bindHover(m,s,c);
+}
+
+/* ---------- AI ---------- */
+function mdHtml(t){
+  var out=[],inL=false;
+  esc(t).split('\n').forEach(function(l){
+    l=l.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+    if(/^\s*[-•*]\s+/.test(l)){if(!inL){out.push('<ul>');inL=true}out.push('<li>'+l.replace(/^\s*[-•*]\s+/,'')+'</li>');return}
+    if(inL){out.push('</ul>');inL=false}
+    if(/^#{1,4}\s+/.test(l))out.push('<h4>'+l.replace(/^#{1,4}\s+/,'')+'</h4>');
+    else if(l.trim())out.push('<p>'+l+'</p>');
+  });
+  if(inL)out.push('</ul>');return out.join('');
+}
+function dataFor(keys){
+  return keys.map(function(k){var m=MK[k],s=series(k);if(!s.length)return null;
+    return m.t+' ('+m.u+') ช่วงปกติ '+refText(m)+': '+s.map(function(p){return p.date+'='+fmt(m,p.v)+'['+ST[status(m,p.v)].t+']'}).join(', ')}).filter(Boolean).join('\n');
+}
+function who(){return (profile.age?'อายุ '+profile.age+' ปี':'')+(profile.sex?' เพศ'+profile.sex:'')||'ไม่ระบุอายุและเพศ'}
+function errMsg(e){return e&&e.code==='not_granted'?'ยังไม่ได้รับอนุญาตให้เรียก Claude':e&&e.code==='rate_limited'?'เรียกถี่เกินไป ลองใหม่ในอีกสักครู่':'วิเคราะห์ไม่สำเร็จ ลองใหม่อีกครั้ง'}
+async function runAI(prompt,target,runBtn,stopBtn){
+  if(!sample)return;
+  if(aiAbort)aiAbort.abort();
+  var ac=new AbortController();aiAbort=ac;
+  target.innerHTML='<span class="muted">Claude กำลังอ่านค่าและวิเคราะห์…</span>';
+  runBtn.disabled=true;stopBtn.hidden=false;stopBtn.onclick=function(){ac.abort()};
+  try{
+    var r=await sample(prompt,{signal:ac.signal,modelTier:'default',onText:function(x){target.innerHTML=mdHtml(x.text)}});
+    target.innerHTML=mdHtml(r.text);
+  }catch(e){
+    if(e&&e.code==='cancelled'){if(e.text)target.innerHTML=mdHtml(e.text)}
+    else target.innerHTML=(e&&e.text?mdHtml(e.text):'')+'<div class="err">'+errMsg(e)+'</div>';
+  }finally{runBtn.disabled=false;stopBtn.hidden=true;if(aiAbort===ac)aiAbort=null}
+}
+var FORMAT='ตอบเป็นภาษาไทย กระชับ ใช้หัวข้อขึ้นต้นด้วย "## " และรายการขึ้นต้นด้วย "- " ห้ามวินิจฉัยโรค ใช้ถ้อยคำว่า "เข้าข่าย/อาจสัมพันธ์กับ" และปิดท้ายด้วยข้อควรพบแพทย์เมื่อใด';
+function runOne(){
+  var m=MK[selected];
+  var prompt='คุณเป็นผู้ช่วยให้ความรู้ด้านสุขภาพ ผู้ใช้: '+who()+'\nข้อมูลผลตรวจย้อนหลัง (วันที่=ค่า[สถานะ]):\n'+dataFor([selected])+
+   '\n\nช่วยเขียน: ## แปลผลและแนวโน้ม (ค่าเปลี่ยนไปอย่างไรตามเวลา) ## สาเหตุที่พบบ่อย ## แนวทางป้องกันและปรับพฤติกรรม (อาหาร ออกกำลังกาย การใช้ชีวิต ให้เจาะจง) ## ควรพบแพทย์เมื่อไร\n'+FORMAT;
+  runAI(prompt,$('aiOne'),$('runOne'),$('stopOne'));
+}
+function runAll(){
+  var keys=M.map(function(m){return m.k}).filter(function(k){return series(k).length});
+  var prompt='คุณเป็นผู้ช่วยให้ความรู้ด้านสุขภาพ ผู้ใช้: '+who()+'\nข้อมูลผลตรวจย้อนหลังทุกค่า (วันที่=ค่า[สถานะ]):\n'+dataFor(keys)+
+   '\n\nช่วยเขียน: ## ภาพรวมสุขภาพ ## ค่าที่ควรจับตา (เรียงตามความสำคัญ พร้อมแนวโน้ม) ## ความสัมพันธ์ระหว่างค่า (เช่น น้ำตาล ไขมัน น้ำหนัก ความดัน) ## แผนป้องกัน 3 เดือนข้างหน้า (อาหาร ออกกำลังกาย การนอน) ## ควรตรวจซ้ำหรือพบแพทย์เมื่อไร\n'+FORMAT;
+  runAI(prompt,$('aiAll'),$('runAll'),$('stopAll'));
+}
+
+/* ---------- history list ---------- */
+var confirmDel=null;
+function renderHist(){
+  var rs=sorted().reverse();
+  $('hist').innerHTML=rs.map(function(r){
+    var n=Object.keys(r.values||{}).length,im=(r.imageIds||[]).length;
+    var del=r.demo?'':(confirmDel===r.id?'<button type="button" data-del="'+esc(r.id)+'">ยืนยันลบ</button>':'<button type="button" data-del="'+esc(r.id)+'">ลบ</button>');
+    return '<span class="chip"><b class="num">'+dateTh(r.date)+'</b> '+n+' ค่า'+(im?' · '+im+' ภาพ':'')+(r.demo?' · ตัวอย่าง':'')+' '+del+'</span>'}).join('')||'<span class="muted">ยังไม่มี</span>';
+}
+async function delRec(id){
+  if(confirmDel!==id){confirmDel=id;renderHist();return}
+  confirmDel=null;
+  if(mode==='db'&&col){try{await col.doc(id).delete()}catch(e){}}
+  else{recs=recs.filter(function(r){return r.id!==id});saveLocal();refresh()}
+}
+function saveLocal(){try{localStorage.setItem('hd_recs',JSON.stringify(recs.map(function(r){return {id:r.id,date:r.date,values:r.values,note:r.note,imageIds:[]}})))}catch(e){}}
+
+/* ---------- add panel ---------- */
+var picked=[],extracted={};
+function buildForm(){
+  $('formGroups').innerHTML=GROUPS.map(function(g){return '<div class="group"><h3>'+esc(g)+'</h3><div class="form">'+M.filter(function(m){return m.g===g}).map(function(m){
+    return '<label for="in-'+m.k+'" id="lb-'+m.k+'"><span>'+esc(m.t)+'<small>'+esc(m.u)+' · ปกติ '+refText(m)+'</small></span><input type="number" step="any" inputmode="decimal" id="in-'+m.k+'"></label>'}).join('')+'</div></div>'}).join('');
+}
+function openAdd(){
+  buildForm();picked=[];extracted={};$('prev').innerHTML='';$('files').value='';$('readMsg').textContent='';$('saveMsg').textContent='';$('fnote').value='';
+  $('fdate').value=new Date().toISOString().slice(0,10);$('readImg').disabled=true;
+  $('addOv').hidden=false;
+}
+function setPicked(fl){
+  picked=Array.prototype.slice.call(fl).filter(function(f){return /^image\//.test(f.type)});
+  $('prev').innerHTML=picked.map(function(f){return '<img src="'+URL.createObjectURL(f)+'" alt="ตัวอย่างภาพที่เลือก">'}).join('');
+  $('readImg').disabled=!picked.length||!sample||!canImg;
+  $('readMsg').textContent=!sample?'การอ่านภาพด้วย Claude ยังใช้ไม่ได้ในมุมมองนี้ กรอกค่าเองได้':!canImg?'มุมมองนี้ยังส่งภาพให้ Claude ไม่ได้ กรอกค่าเองได้':'';
+}
+async function readImages(){
+  var btn=$('readImg');btn.disabled=true;$('readMsg').textContent='Claude กำลังอ่านภาพ อาจใช้เวลาสักครู่…';
+  var list=M.map(function(m){return m.k+' = '+m.t+' ('+m.u+')'}).join('\n');
+  var prompt='ภาพที่แนบคือใบรายงานผลตรวจสุขภาพหรือผลแล็บ อ่านค่าตัวเลขที่เห็นจริงในภาพเท่านั้น ห้ามเดา\nรายการค่าที่ต้องการ (key = ชื่อ (หน่วย)):\n'+list+
+   '\n\nกติกา: แปลงหน่วยให้ตรงกับหน่วยที่ระบุ (เช่น mmol/L เป็น mg/dL) ใส่เฉพาะค่าที่อ่านได้ชัด ความดันโลหิตให้แยก sbp และ dbp วันที่ตรวจให้แปลงปี พ.ศ. เป็น ค.ศ. รูปแบบ YYYY-MM-DD ถ้าไม่พบให้เป็น null\nตอบเป็น JSON อย่างเดียว: {"date": "YYYY-MM-DD หรือ null", "values": {"key": ตัวเลข}}';
+  try{
+    var r=await sample.json(prompt,{images:picked,modelTier:'default'});
+    var n=0;
+    M.forEach(function(m){var v=r&&r.values?r.values[m.k]:null;if(typeof v==='number'&&isFinite(v)){$('in-'+m.k).value=v;$('lb-'+m.k).classList.add('read');n++}});
+    if(r&&/^\d{4}-\d{2}-\d{2}$/.test(r.date||''))$('fdate').value=r.date;
+    $('readMsg').textContent=n?'อ่านได้ '+n+' ค่า กรุณาตรวจทานกับใบผลตรวจก่อนบันทึก':'อ่านค่าจากภาพไม่ได้ ลองภาพที่ชัดขึ้น หรือกรอกค่าเอง';
+  }catch(e){$('readMsg').textContent=e&&e.code==='images_unavailable'?'มุมมองนี้ยังส่งภาพให้ Claude ไม่ได้':errMsg(e)}
+  btn.disabled=!picked.length;
+}
+async function saveRec(){
+  var values={};M.forEach(function(m){var v=$('in-'+m.k).value;if(v!==''&&isFinite(+v))values[m.k]=+v});
+  if(!Object.keys(values).length){$('saveMsg').textContent='กรอกอย่างน้อย 1 ค่า';return}
+  var date=$('fdate').value;if(!date){$('saveMsg').textContent='เลือกวันที่ตรวจ';return}
+  var btn=$('saveRec');btn.disabled=true;$('saveMsg').textContent='';
+  var ids=[];
+  if(assets&&picked.length){for(var i=0;i<picked.length;i++){try{var u=await assets.upload(picked[i]);ids.push(u.id)}catch(e){}}}
+  var rec={date:date,values:values,note:$('fnote').value.trim(),imageIds:ids,createdAt:Date.now()};
+  try{
+    if(mode==='db'&&col){await col.add(rec)}
+    else{rec.id='l-'+Date.now();recs=recs.filter(function(r){return !r.demo}).concat([rec]);mode='local';saveLocal();refresh()}
+    $('addOv').hidden=true;
+    var first=Object.keys(values)[0];if(first)selected=first;
+    refresh();
+  }catch(e){$('saveMsg').textContent='บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง'}
+  btn.disabled=false;
+}
+
+/* ---------- wiring ---------- */
+function refresh(){
+  if(!recs.length){recs=DEMO.slice()}
+  var isDemo=recs.every(function(r){return r.demo});
+  $('demoBar').hidden=!isDemo;
+  if(!series(selected).length){var k=M.filter(function(m){return series(m.k).length})[0];selected=k?k.k:'fbs'}
+  renderSummary();renderFilters();renderCards();renderDetail();renderHist();
+}
+function select(k){selected=k;renderCards();renderDetail();if(window.innerWidth<=900)$('detail').scrollIntoView({behavior:'smooth',block:'start'})}
+document.addEventListener('click',function(e){
+  var t=e.target.closest('[data-k]');if(t){select(t.getAttribute('data-k'));return}
+  t=e.target.closest('[data-f]');if(t){filter=t.getAttribute('data-f');renderFilters();renderCards();return}
+  t=e.target.closest('[data-del]');if(t){delRec(t.getAttribute('data-del'));return}
+  if(e.target.id==='runOne')runOne();
+});
+$('runAll').onclick=runAll;
+$('openAdd').onclick=openAdd;$('demoAdd').onclick=openAdd;
+$('closeAdd').onclick=function(){$('addOv').hidden=true};
+$('files').onchange=function(e){setPicked(e.target.files)};
+$('readImg').onclick=readImages;$('saveRec').onclick=saveRec;
+var dz=$('drop');
+['dragenter','dragover'].forEach(function(n){dz.addEventListener(n,function(e){e.preventDefault();dz.classList.add('over')})});
+['dragleave','drop'].forEach(function(n){dz.addEventListener(n,function(e){e.preventDefault();dz.classList.remove('over')})});
+dz.addEventListener('drop',function(e){if(e.dataTransfer&&e.dataTransfer.files.length)setPicked(e.dataTransfer.files)});
+$('age').value=profile.age;$('sex').value=profile.sex;
+function saveProfile(){profile.age=$('age').value;profile.sex=$('sex').value;try{localStorage.setItem('hd_profile',JSON.stringify(profile))}catch(e){}}
+$('age').onchange=saveProfile;$('sex').onchange=saveProfile;
+document.addEventListener('keydown',function(e){if(e.key==='Escape')$('addOv').hidden=true});
+
+refresh();
+
+/* ---------- capabilities (light up when available) ---------- */
+(async function(){
+  try{
+    var c=window.claude;if(!c||!c.use)throw 0;
+    sample=await c.use('sample');
+    if(sample){try{var l=await sample.limits();canImg=!!(l&&l.images);if(canImg)$('files').accept=l.images.mediaTypes.join(',')}catch(e){}}
+    $('runAll').disabled=!sample;renderDetail();
+    assets=await c.use('assets');
+    var db=await c.use('db'),user=await c.use('user');
+    if(db&&user&&user.id){
+      var uid=await user.id();
+      col=db.collection('data/users/'+uid+'/checkups');mode='db';
+      col.onSnapshot(function(snap){
+        recs=snap.docs.map(function(d){var o=d.data()||{};o.id=d.id;return o}).filter(function(r){return r.date&&r.values});
+        refresh();
+      },function(){mode='local'});
+      return;
+    }
+  }catch(e){}
+  try{var saved=JSON.parse(localStorage.getItem('hd_recs')||'null');if(saved&&saved.length){recs=saved;mode='local';refresh()}}catch(e){}
+  if(!sample)$('runAll').disabled=true;
+})();
+refreshAiButtons();
+function refreshAiButtons(){if(!sample){$('runAll').disabled=true}}
+})();
+</script>
