@@ -173,6 +173,7 @@ input[type=number]{width:90px}
     </div>
   </header>
 
+  <div class="demo" id="pendBar" hidden><span id="pendTxt"></span></div>
   <div class="note" id="pdfMsg" role="status"></div>
   <div class="demo" id="demoBar" hidden>
     <span><b>ข้อมูลตัวอย่าง</b> ตัวเลขด้านล่างเป็นตัวอย่างสมมติ ไม่ใช่ผลตรวจของคุณ</span>
@@ -341,6 +342,7 @@ var recs=DEMO.slice(), mode='demo', col=null, selected='fbs', filter='all', asse
 var profile={age:'',sex:''};
 try{var p=JSON.parse(localStorage.getItem('hd_profile')||'{}');profile.age=p.age||'';profile.sex=p.sex||''}catch(e){}
 
+function hasVals(r){return r&&r.values&&Object.keys(r.values).length>0}
 function sorted(){return recs.slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0})}
 function series(k){return sorted().filter(function(r){return r.values&&r.values[k]!=null}).map(function(r){return {t:+new Date(r.date+'T00:00:00'),date:r.date,v:+r.values[k],r:r}})}
 function latestVals(){var o={};M.forEach(function(m){var s=series(m.k);if(s.length)o[m.k]=s[s.length-1]});return o}
@@ -399,7 +401,7 @@ function bindHover(m,pts,c){
 /* ---------- render: summary / cards ---------- */
 function renderSummary(){
   var lv=latestVals(),keys=Object.keys(lv),cnt={good:0,warn:0,bad:0};
-  var rs=sorted(),last=rs[rs.length-1];
+  var rs=sorted().filter(hasVals),last=rs[rs.length-1];
   $('sumDate').textContent=last?dateTh(last.date):'-';
   $('sumSub').textContent=rs.length?'ตรวจแล้ว '+rs.length+' ครั้ง · ค่าล่าสุด '+keys.length+' รายการ':'ยังไม่มีผลตรวจ';
   var att=[];
@@ -514,7 +516,7 @@ function renderHist(){
   $('hist').innerHTML=rs.map(function(r){
     var n=Object.keys(r.values||{}).length,im=(r.imageIds||[]).length;
     var del=r.demo?'':(confirmDel===r.id?'<button type="button" data-del="'+esc(r.id)+'">ยืนยันลบ</button>':'<button type="button" data-del="'+esc(r.id)+'">ลบ</button>');
-    return '<span class="chip"><b class="num">'+dateTh(r.date)+'</b> '+n+' ค่า'+(im?' · '+im+' ภาพ':'')+(r.demo?' · ตัวอย่าง':'')+' '+del+'</span>'}).join('')||'<span class="muted">ยังไม่มี</span>';
+    return '<span class="chip"><b class="num">'+dateTh(r.date)+'</b> '+(n?n+' ค่า':'รอ Claude อ่านค่า')+(im?' · '+im+' ภาพ':'')+(r.demo?' · ตัวอย่าง':'')+' '+del+'</span>'}).join('')||'<span class="muted">ยังไม่มี</span>';
 }
 async function delRec(id){
   if(confirmDel!==id){confirmDel=id;renderHist();return}
@@ -542,7 +544,7 @@ function renderPrev(){
 function setPicked(fl){
   picked=Array.prototype.slice.call(fl).filter(function(f){return /^image\//.test(f.type)});imgDates=[];
   renderPrev();
-  $('readMsg').textContent=!sample?'มุมมองนี้ยังเรียก Claude ไม่ได้ ใช้ "นำเข้าค่า" ด้านล่างหรือกรอกเอง ภาพยังแนบเก็บไว้กับผลตรวจได้':!canImg?'มุมมองนี้อาจยังส่งภาพให้ Claude ไม่ได้ หากอ่านไม่สำเร็จ ให้ส่งภาพให้ Claude ในแชทแล้ววางผลที่ช่อง "นำเข้าค่า"':'';
+  $('readMsg').textContent=!sample?'มุมมองนี้อ่านภาพในหน้าไม่ได้ กด "บันทึกผลตรวจ" เพื่อแนบภาพ แล้วบอก Claude ในแชทว่า "อ่านภาพที่อัปโหลดแล้ว" ค่าจะขึ้นเอง':!canImg?'มุมมองนี้อาจยังส่งภาพให้ Claude ไม่ได้ หากอ่านไม่สำเร็จ กด "บันทึกผลตรวจ" เพื่อแนบภาพ แล้วบอก Claude ในแชทว่า "อ่านภาพที่อัปโหลดแล้ว"':'';
   if(sample&&picked.length)readImages();
 }
 async function shrink(f){
@@ -577,7 +579,7 @@ async function readImages(){
   var dates=Object.keys(found).filter(function(d){return Object.keys(found[d]).length}).sort();
   if(!dates.length){
     var code=lastErr&&lastErr.code;
-    msg.textContent=code==='images_unavailable'?'มุมมองนี้ส่งภาพให้ Claude ไม่ได้ ให้ส่งภาพในแชทกับ Claude แล้ววางผลที่ช่อง "นำเข้าค่า" ด้านบน':
+    msg.textContent=code==='images_unavailable'?'มุมมองนี้อ่านภาพในหน้าไม่ได้ กด "บันทึกผลตรวจ" เพื่อแนบภาพ แล้วบอก Claude ในแชทว่า "อ่านภาพที่อัปโหลดแล้ว" ค่าจะขึ้นเอง':
       (lastErr?errMsg(lastErr)+' (รหัส '+(code||'ไม่ทราบ')+')':'อ่านค่าจากภาพไม่ได้ ลองภาพที่ชัดขึ้น หรือกรอกค่าเอง');
     btn.disabled=!picked.length;return;
   }
@@ -636,24 +638,25 @@ async function runImport(){
 }
 async function saveRec(){
   var values={};M.forEach(function(m){var v=$('in-'+m.k).value;if(v!==''&&isFinite(+v))values[m.k]=+v});
-  if(!Object.keys(values).length){$('saveMsg').textContent='กรอกอย่างน้อย 1 ค่า';return}
+  if(!Object.keys(values).length&&!picked.length){$('saveMsg').textContent='กรอกอย่างน้อย 1 ค่า หรือแนบภาพใบผลตรวจ';return}
   var date=$('fdate').value||new Date().toISOString().slice(0,10);
   var btn=$('saveRec');btn.disabled=true;$('saveMsg').textContent='';
   var ids=[];upFail=0;upCode='';
   for(var i=0;i<picked.length;i++){var id=await upOne(picked[i]);if(id)ids.push(id)}
   var rec={date:date,values:values,note:$('fnote').value.trim(),imageIds:ids,createdAt:Date.now()};
+  if(!Object.keys(values).length)rec.pending=true;
   try{
     await persist(rec);
     $('addOv').hidden=true;
-    var first=Object.keys(values)[0];if(first)selected=first;
-    refresh();upNote(ids.length);
+    var first=Object.keys(values)[0];if(first)selected=first;if(rec.pending)$('galMsg').textContent='แนบภาพแล้ว บอก Claude ในแชทว่า "อ่านภาพที่อัปโหลดแล้ว" เพื่ออ่านค่าให้';
+    refresh();if(rec.pending&&ids.length){$('galMsg').textContent='แนบภาพแล้ว บอก Claude ในแชทว่า "อ่านภาพที่อัปโหลดแล้ว" เพื่ออ่านค่าให้'}else upNote(ids.length);
   }catch(e){$('saveMsg').textContent='บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง'}
   btn.disabled=false;
 }
 
 /* ---------- PDF report ---------- */
 function reportBlocks(){
-  var lv=latestVals(),ms=M.filter(function(m){return lv[m.k]}),rs=sorted(),last=rs[rs.length-1];
+  var lv=latestVals(),ms=M.filter(function(m){return lv[m.k]}),rs=sorted().filter(hasVals),last=rs[rs.length-1];
   var isDemo=rs.every(function(r){return r.demo}),cnt={good:0,warn:0,bad:0};
   ms.forEach(function(m){cnt[status(m,lv[m.k].v)]++});
   var today=new Date().toISOString().slice(0,10),prof=(profile.age||profile.sex)?' · '+who():'';
@@ -736,6 +739,8 @@ function refresh(){
   var isDemo=recs.every(function(r){return r.demo});
   $('demoBar').hidden=!isDemo;
   if(!series(selected).length){var k=M.filter(function(m){return series(m.k).length})[0];selected=k?k.k:'fbs'}
+  var pend=recs.filter(function(r){return !r.demo&&!hasVals(r)}).length;
+  $('pendBar').hidden=!pend;$('pendTxt').innerHTML='<b>มี '+pend+' ใบรอ Claude อ่านค่า</b> บอก Claude ในแชทว่า "อ่านภาพที่อัปโหลดแล้ว" ค่าจะขึ้นในหน้านี้เอง';
   renderSummary();renderFilters();renderCards();renderDetail();renderHist();renderGallery();
 }
 function select(k){selected=k;renderCards();renderDetail();if(window.innerWidth<=900)$('detail').scrollIntoView({behavior:'smooth',block:'start'})}
@@ -780,7 +785,7 @@ refresh();
     var db=await c.use('db'),user=await c.use('user');
     if(db&&user&&user.id){
       var uid=await user.id();
-      col=db.collection('data/users/'+uid+'/checkups');mode='db';$('syncNote').textContent='บันทึกไว้ในบัญชีของคุณ เปิดดูได้ทุกเครื่องที่ล็อกอินบัญชีเดียวกัน';
+      col=db.collection('data/users/'+uid+'/checkups/items');mode='db';$('syncNote').textContent='บันทึกไว้ในบัญชีของคุณ เปิดดูได้ทุกเครื่องที่ล็อกอินบัญชีเดียวกัน';
       col.onSnapshot(function(snap){
         recs=snap.docs.map(function(d){var o=d.data()||{};o.id=d.id;return o}).filter(function(r){return r.date&&r.values});
         refresh();
