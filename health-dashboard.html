@@ -534,8 +534,8 @@ async function readImages(){
   var list=M.map(function(m){return m.k+' = '+m.t+' ('+m.u+')'}).join('\n');
   var prompt='ภาพที่แนบคือใบรายงานผลตรวจสุขภาพหรือผลแล็บ อ่านค่าตัวเลขที่เห็นจริงในภาพเท่านั้น ห้ามเดา\nรายการค่าที่ต้องการ (key = ชื่อ (หน่วย)):\n'+list+
    '\n\nกติกา: แปลงหน่วยให้ตรงกับหน่วยที่ระบุ (เช่น mmol/L เป็น mg/dL) ใส่เฉพาะค่าที่อ่านได้ชัด ความดันโลหิตให้แยก sbp และ dbp วันที่ให้แปลงปี พ.ศ. เป็น ค.ศ. (ลบ 543) รูปแบบ YYYY-MM-DD\n'+
-   '"date" คือวันที่ออกผล (Result Date) ของใบนี้ "values" คือคอลัมน์ Result ส่วน "previous" คือคอลัมน์ Prev.Result/Date แยกเป็นรายการตามวันที่ของแต่ละค่า\n'+
-   'ตอบเป็น JSON อย่างเดียว: {"date":"YYYY-MM-DD หรือ null","values":{"key":ตัวเลข},"previous":[{"date":"YYYY-MM-DD","values":{"key":ตัวเลข}}]}';
+   '"date" คือวันที่ออกผล (Result Date) ของใบนี้ "values" คือเฉพาะคอลัมน์ Result (ค่าตรวจปัจจุบัน) ห้ามนำค่าจากคอลัมน์ Prev.Result/Date มาใช้\n'+
+   'ตอบเป็น JSON อย่างเดียว: {"date":"YYYY-MM-DD หรือ null","values":{"key":ตัวเลข}}';
   var found={},ok=0,lastErr=null;
   function clean(v){var o={};Object.keys(v||{}).forEach(function(k){var n=+v[k];if(MK[k]&&typeof v[k]!=='boolean'&&isFinite(n))o[k]=n});return o}
   function add(d,v,weak){
@@ -547,7 +547,7 @@ async function readImages(){
     try{
       var blob=await shrink(picked[i]);
       var r=await sample.json(prompt,{images:[blob],modelTier:'default',cache:false});
-      if(r){add(r.date,r.values,false);(Array.isArray(r.previous)?r.previous:[]).forEach(function(q){add(q&&q.date,q&&q.values,true)});ok++}
+      if(r){add(r.date,r.values,false);ok++}
     }catch(e){lastErr=e;if(e&&(e.code==='images_unavailable'||e.code==='not_granted'))break}
   }
   var dates=Object.keys(found).filter(function(d){return Object.keys(found[d]).length}).sort();
@@ -564,7 +564,7 @@ async function readImages(){
   }else{
     $('impText').value=dates.map(function(d){return d+' '+Object.keys(found[d]).map(function(k){return k+'='+found[d][k]}).join(' ')}).join('\n');
     $('impBox').open=true;
-    msg.textContent='พบผลตรวจ '+dates.length+' วันที่ (รวมค่าครั้งก่อนในใบ) ใส่ไว้ในช่อง "นำเข้าค่า" แล้ว ตรวจทานและกด "นำเข้าและบันทึก"';
+    msg.textContent='พบผลตรวจ '+dates.length+' วันที่ ใส่ไว้ในช่อง "นำเข้าค่า" แล้ว ตรวจทานและกด "นำเข้าและบันทึก"';
   }
   btn.disabled=!picked.length;
 }
