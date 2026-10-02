@@ -136,14 +136,11 @@ input[type=number]{width:90px}
 .sheet .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
 .disc{font-size:12px;color:var(--ink2)}
 .gal{display:flex;flex-direction:column;gap:10px}
-.galrow{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-.galrow .d{font-weight:600;min-width:110px}
-.galrow .th{display:flex;gap:8px;flex-wrap:wrap;flex:1;min-width:0}
-.galrow .th button{padding:0;border:1px solid var(--line);border-radius:8px;background:var(--surface2);overflow:hidden;display:block}
-.galrow .th img{height:96px;width:auto;max-width:100%;display:block}
+.gal .th button:not(.x){padding:0;border:1px solid var(--line);border-radius:8px;background:var(--surface2);overflow:hidden;display:block}
+.gal .th img{height:120px;width:auto;max-width:100%;display:block}
 #lb[hidden]{display:none!important}
 .pv{position:relative;display:inline-block}
-.pv .x,.tw .x{position:absolute;top:4px;right:4px;border:0;border-radius:6px;background:rgba(10,20,22,.78);color:#fff;font-size:12px;padding:1px 7px;line-height:1.6}
+.pv .x,.gal .tw .x{position:absolute;top:4px;right:4px;border:0;border-radius:6px;background:rgba(10,20,22,.82);color:#fff;font-size:12px;padding:1px 8px;line-height:1.6}
 .tw{position:relative;display:inline-block}
 #repHost{position:fixed;left:-10000px;top:0;width:760px;pointer-events:none}
 .rep{--bg:#FFFFFF;--surface:#FFFFFF;--surface2:#F7FAFA;--ink:#11292B;--ink2:#4B6466;--line:#D6E1E1;--accent:#0C7C86;--good:#1B8449;--good-bg:#DDF2E5;--warn:#A8690B;--warn-bg:#FBEBCB;--bad:#C0352D;--bad-bg:#FADAD6;--band:rgba(27,132,73,.12);
@@ -206,10 +203,12 @@ input[type=number]{width:90px}
   </div>
 
   <section aria-label="ภาพใบผลตรวจ">
-    <h3 style="font-size:14px;margin-bottom:8px" class="muted">ภาพใบผลตรวจ</h3>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <h3 style="font-size:14px" class="muted">ภาพใบผลตรวจ</h3>
+      <button class="btn sm primary" id="addSheet" type="button">+ เพิ่มใบตรวจ</button>
+    </div>
     <div id="gallery"></div>
     <div class="note" id="galMsg" style="margin-top:6px"></div>
-    <input type="file" id="attachFile" accept="image/*" multiple hidden>
   </section>
 
   <section class="overall" aria-label="วิเคราะห์ภาพรวม">
@@ -614,9 +613,10 @@ async function runImport(){
   if(!list.length){msg.textContent='ไม่พบข้อมูลที่อ่านได้ ตรวจรูปแบบ วันที่ ชื่อค่า=ตัวเลข';return}
   $('impGo').disabled=true;msg.textContent='';
   try{
+    var latestDate=list.map(function(x){return x.date}).sort().pop();
     for(var i=0;i<list.length;i++){
       var ids=[];
-      if(assets){for(var j=0;j<picked.length;j++){if(imgDates[j]===list[i].date){try{var u=await assets.upload(await shrink(picked[j]));ids.push(u.id)}catch(e){}}}}
+      if(assets){for(var j=0;j<picked.length;j++){if(imgDates[j]===list[i].date||(!imgDates[j]&&list[i].date===latestDate)){try{var u=await assets.upload(await shrink(picked[j]));ids.push(u.id)}catch(e){}}}}
       await persist({date:list[i].date,values:list[i].values,note:'นำเข้าจากข้อความ',imageIds:ids,createdAt:Date.now()+i});
     }
     if(mode==='local')saveLocal();
@@ -697,15 +697,14 @@ async function savePdf(){
 }
 
 /* ---------- gallery ---------- */
-var attachTarget=null,confirmImg=null;
+var confirmImg=null;
 function renderGallery(){
-  var rs=sorted().reverse().filter(function(r){return !r.demo});
-  if(!rs.length){$('gallery').innerHTML='<div class="box">ยังไม่มีผลตรวจที่บันทึก เมื่อบันทึกผลตรวจแล้ว จะแนบภาพใบผลตรวจของแต่ละครั้งได้ที่นี่</div>';return}
-  $('gallery').innerHTML='<div class="gal">'+rs.map(function(r){
-    var ids=r.imageIds||[];
-    return '<div class="galrow"><div class="d">'+dateTh(r.date)+'</div><div class="th">'+
-      (ids.length?ids.map(function(id){var key=r.id+'|'+id;return '<span class="tw"><button type="button" data-lb="'+esc(id)+'" aria-label="ดูภาพขยาย"><img src="/_blob/'+esc(id)+'" alt="ภาพใบผลตรวจ '+esc(dateTh(r.date))+'"></button><button class="x" type="button" data-delrec="'+esc(r.id)+'" data-delimg="'+esc(id)+'">'+(confirmImg===key?'ยืนยันลบ':'ลบ')+'</button></span>'}).join(''):'<span class="muted">ยังไม่มีภาพ</span>')+
-      '</div><button class="btn sm" type="button" data-attach="'+esc(r.id)+'">+ เพิ่มภาพ</button></div>'}).join('')+'</div>';
+  var items=[];
+  sorted().reverse().filter(function(r){return !r.demo}).forEach(function(r){(r.imageIds||[]).forEach(function(id){items.push({r:r,id:id})})});
+  if(!items.length){$('gallery').innerHTML='<div class="box">ยังไม่มีภาพใบผลตรวจ กด "+ เพิ่มใบตรวจ" แล้วเลือกภาพ ระบบจะอ่านค่าและวันที่จากภาพให้</div>';return}
+  $('gallery').innerHTML='<div class="gal"><div class="th" style="display:flex;gap:10px;flex-wrap:wrap">'+items.map(function(x){
+    var key=x.r.id+'|'+x.id;
+    return '<span class="tw"><button type="button" data-lb="'+esc(x.id)+'" aria-label="ดูภาพขยาย"><img src="/_blob/'+esc(x.id)+'" alt="ภาพใบผลตรวจ '+esc(dateTh(x.r.date))+'"></button><button class="x" type="button" data-delrec="'+esc(x.r.id)+'" data-delimg="'+esc(x.id)+'">'+(confirmImg===key?'ยืนยันลบ':'ลบ')+'</button></span>'}).join('')+'</div></div>';
 }
 async function delImage(recId,imgId){
   var key=recId+'|'+imgId,msg=$('galMsg');
@@ -721,22 +720,6 @@ async function delImage(recId,imgId){
   }catch(e){msg.textContent='ลบภาพไม่สำเร็จ ลองใหม่อีกครั้ง'}
   renderGallery();
 }
-async function attachImages(files){
-  var msg=$('galMsg'),r=recs.filter(function(x){return x.id===attachTarget})[0];
-  if(!r||!files.length)return;
-  if(!assets){msg.textContent='มุมมองนี้ยังอัปโหลดภาพไม่ได้ (ต้องเปิดในฐานะเจ้าของหน้า)';return}
-  msg.textContent='กำลังอัปโหลด '+files.length+' ภาพ…';
-  var ids=(r.imageIds||[]).slice(),fail=0;
-  for(var i=0;i<files.length;i++){
-    try{var b=await shrink(files[i]);var u=await assets.upload(b);ids.push(u.id)}catch(e){fail++}
-  }
-  try{
-    if(mode==='db'&&col){await col.doc(r.id).update({imageIds:ids})}
-    else{r.imageIds=ids;saveLocal();refresh()}
-    msg.textContent=fail?'อัปโหลดสำเร็จ '+(files.length-fail)+' ภาพ ไม่สำเร็จ '+fail+' ภาพ':'เพิ่มภาพแล้ว';
-  }catch(e){msg.textContent='บันทึกภาพไม่สำเร็จ ลองใหม่อีกครั้ง'}
-}
-
 /* ---------- wiring ---------- */
 function refresh(){
   if(!recs.length){recs=DEMO.slice()}
@@ -751,12 +734,11 @@ document.addEventListener('click',function(e){
   t=e.target.closest('[data-f]');if(t){filter=t.getAttribute('data-f');renderFilters();renderCards();return}
   t=e.target.closest('[data-delimg]');if(t){delImage(t.getAttribute('data-delrec'),t.getAttribute('data-delimg'));return}
   t=e.target.closest('[data-rmpick]');if(t){var ix=+t.getAttribute('data-rmpick');picked.splice(ix,1);imgDates.splice(ix,1);renderPrev();return}
-  t=e.target.closest('[data-attach]');if(t){attachTarget=t.getAttribute('data-attach');$('galMsg').textContent='';$('attachFile').click();return}
   t=e.target.closest('[data-lb]');if(t){$('lbImg').src='/_blob/'+t.getAttribute('data-lb');$('lb').hidden=false;return}
   t=e.target.closest('[data-del]');if(t){delRec(t.getAttribute('data-del'));return}
   if(e.target.id==='runOne')runOne();
 });
-$('attachFile').onchange=function(e){var f=Array.prototype.slice.call(e.target.files);e.target.value='';attachImages(f)};
+$('addSheet').onclick=openAdd;
 $('lb').onclick=function(){$('lb').hidden=true};
 $('pdfBtn').onclick=savePdf;
 $('runAll').onclick=runAll;
