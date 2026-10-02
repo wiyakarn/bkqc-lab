@@ -135,6 +135,13 @@ input[type=number]{width:90px}
 .form label.read{border-color:var(--accent);background:var(--accent-soft)}
 .sheet .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
 .disc{font-size:12px;color:var(--ink2)}
+.gal{display:flex;flex-direction:column;gap:10px}
+.galrow{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.galrow .d{font-weight:600;min-width:110px}
+.galrow .th{display:flex;gap:8px;flex-wrap:wrap;flex:1;min-width:0}
+.galrow .th button{padding:0;border:1px solid var(--line);border-radius:8px;background:var(--surface2);overflow:hidden;display:block}
+.galrow .th img{height:96px;width:auto;max-width:100%;display:block}
+#lb[hidden]{display:none!important}
 
 @media (max-width:900px){
   .summary{grid-template-columns:1fr}
@@ -181,6 +188,13 @@ input[type=number]{width:90px}
     <aside class="detail" id="detail" aria-live="polite"></aside>
   </div>
 
+  <section aria-label="ภาพใบผลตรวจ">
+    <h3 style="font-size:14px;margin-bottom:8px" class="muted">ภาพใบผลตรวจ</h3>
+    <div id="gallery"></div>
+    <div class="note" id="galMsg" style="margin-top:6px"></div>
+    <input type="file" id="attachFile" accept="image/*" multiple hidden>
+  </section>
+
   <section class="overall" aria-label="วิเคราะห์ภาพรวม">
     <h2>วิเคราะห์ภาพรวมและแนวทางป้องกัน</h2>
     <div class="row">
@@ -201,6 +215,9 @@ input[type=number]{width:90px}
   </section>
 </div>
 
+<div class="overlay" id="lb" hidden style="display:flex;align-items:center;justify-content:center">
+  <img id="lbImg" alt="ภาพใบผลตรวจ" style="max-width:100%;max-height:100%;border-radius:8px;background:#fff">
+</div>
 <div class="overlay" id="addOv" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="addTitle">
     <div class="row"><h2 id="addTitle">เพิ่มผลตรวจ</h2><button class="btn sm" id="closeAdd" type="button">ปิด</button></div>
@@ -485,7 +502,7 @@ async function delRec(id){
   if(mode==='db'&&col){try{await col.doc(id).delete()}catch(e){}}
   else{recs=recs.filter(function(r){return r.id!==id});saveLocal();refresh()}
 }
-function saveLocal(){try{localStorage.setItem('hd_recs',JSON.stringify(recs.map(function(r){return {id:r.id,date:r.date,values:r.values,note:r.note,imageIds:[]}})))}catch(e){}}
+function saveLocal(){try{localStorage.setItem('hd_recs',JSON.stringify(recs.map(function(r){return {id:r.id,date:r.date,values:r.values,note:r.note,imageIds:r.imageIds||[]}})))}catch(e){}}
 
 /* ---------- add panel ---------- */
 var picked=[],extracted={};
@@ -595,21 +612,52 @@ async function saveRec(){
   btn.disabled=false;
 }
 
+/* ---------- gallery ---------- */
+var attachTarget=null;
+function renderGallery(){
+  var rs=sorted().reverse().filter(function(r){return !r.demo});
+  if(!rs.length){$('gallery').innerHTML='<div class="box">ยังไม่มีผลตรวจที่บันทึก เมื่อบันทึกผลตรวจแล้ว จะแนบภาพใบผลตรวจของแต่ละครั้งได้ที่นี่</div>';return}
+  $('gallery').innerHTML='<div class="gal">'+rs.map(function(r){
+    var ids=r.imageIds||[];
+    return '<div class="galrow"><div class="d">'+dateTh(r.date)+'</div><div class="th">'+
+      (ids.length?ids.map(function(id){return '<button type="button" data-lb="'+esc(id)+'" aria-label="ดูภาพขยาย"><img src="/_blob/'+esc(id)+'" alt="ภาพใบผลตรวจ '+esc(dateTh(r.date))+'"></button>'}).join(''):'<span class="muted">ยังไม่มีภาพ</span>')+
+      '</div><button class="btn sm" type="button" data-attach="'+esc(r.id)+'">+ เพิ่มภาพ</button></div>'}).join('')+'</div>';
+}
+async function attachImages(files){
+  var msg=$('galMsg'),r=recs.filter(function(x){return x.id===attachTarget})[0];
+  if(!r||!files.length)return;
+  if(!assets){msg.textContent='มุมมองนี้ยังอัปโหลดภาพไม่ได้ (ต้องเปิดในฐานะเจ้าของหน้า)';return}
+  msg.textContent='กำลังอัปโหลด '+files.length+' ภาพ…';
+  var ids=(r.imageIds||[]).slice(),fail=0;
+  for(var i=0;i<files.length;i++){
+    try{var b=await shrink(files[i]);var u=await assets.upload(b);ids.push(u.id)}catch(e){fail++}
+  }
+  try{
+    if(mode==='db'&&col){await col.doc(r.id).update({imageIds:ids})}
+    else{r.imageIds=ids;saveLocal();refresh()}
+    msg.textContent=fail?'อัปโหลดสำเร็จ '+(files.length-fail)+' ภาพ ไม่สำเร็จ '+fail+' ภาพ':'เพิ่มภาพแล้ว';
+  }catch(e){msg.textContent='บันทึกภาพไม่สำเร็จ ลองใหม่อีกครั้ง'}
+}
+
 /* ---------- wiring ---------- */
 function refresh(){
   if(!recs.length){recs=DEMO.slice()}
   var isDemo=recs.every(function(r){return r.demo});
   $('demoBar').hidden=!isDemo;
   if(!series(selected).length){var k=M.filter(function(m){return series(m.k).length})[0];selected=k?k.k:'fbs'}
-  renderSummary();renderFilters();renderCards();renderDetail();renderHist();
+  renderSummary();renderFilters();renderCards();renderDetail();renderHist();renderGallery();
 }
 function select(k){selected=k;renderCards();renderDetail();if(window.innerWidth<=900)$('detail').scrollIntoView({behavior:'smooth',block:'start'})}
 document.addEventListener('click',function(e){
   var t=e.target.closest('[data-k]');if(t){select(t.getAttribute('data-k'));return}
   t=e.target.closest('[data-f]');if(t){filter=t.getAttribute('data-f');renderFilters();renderCards();return}
+  t=e.target.closest('[data-attach]');if(t){attachTarget=t.getAttribute('data-attach');$('galMsg').textContent='';$('attachFile').click();return}
+  t=e.target.closest('[data-lb]');if(t){$('lbImg').src='/_blob/'+t.getAttribute('data-lb');$('lb').hidden=false;return}
   t=e.target.closest('[data-del]');if(t){delRec(t.getAttribute('data-del'));return}
   if(e.target.id==='runOne')runOne();
 });
+$('attachFile').onchange=function(e){var f=Array.prototype.slice.call(e.target.files);e.target.value='';attachImages(f)};
+$('lb').onclick=function(){$('lb').hidden=true};
 $('runAll').onclick=runAll;
 $('openAdd').onclick=openAdd;$('demoAdd').onclick=openAdd;
 $('closeAdd').onclick=function(){$('addOv').hidden=true};
@@ -622,7 +670,7 @@ dz.addEventListener('drop',function(e){if(e.dataTransfer&&e.dataTransfer.files.l
 $('age').value=profile.age;$('sex').value=profile.sex;
 function saveProfile(){profile.age=$('age').value;profile.sex=$('sex').value;try{localStorage.setItem('hd_profile',JSON.stringify(profile))}catch(e){}}
 $('age').onchange=saveProfile;$('sex').onchange=saveProfile;
-document.addEventListener('keydown',function(e){if(e.key==='Escape')$('addOv').hidden=true});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){$('addOv').hidden=true;$('lb').hidden=true}});
 
 refresh();
 
