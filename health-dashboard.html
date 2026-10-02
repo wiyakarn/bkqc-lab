@@ -592,6 +592,15 @@ async function readImages(){
   }
   btn.disabled=!picked.length;
 }
+var upFail=0,upCode='';
+async function upOne(f){
+  if(!assets){upFail++;upCode='no_assets';return null}
+  try{var u=await assets.upload(await shrink(f));return u.id}catch(e){upFail++;upCode=(e&&e.code)||'error';return null}
+}
+function upNote(n){
+  if(!upFail){$('galMsg').textContent=n?'เพิ่มภาพแล้ว '+n+' ภาพ':'';return}
+  $('galMsg').textContent='อัปโหลดภาพไม่สำเร็จ '+upFail+' ภาพ ('+(upCode==='no_assets'?'มุมมองนี้ไม่ให้อัปโหลดภาพ ต้องเปิดในฐานะเจ้าของหน้า':'รหัส '+upCode)+') ผลตรวจบันทึกแล้วแต่ไม่มีภาพแนบ';
+}
 async function persist(rec){
   if(mode==='db'&&col){var ref=await col.add(rec);return ref.id}
   rec.id='l-'+Date.now()+'-'+Math.floor(Math.random()*1e4);recs=recs.filter(function(r){return !r.demo}).concat([rec]);mode='local';saveLocal();return rec.id;
@@ -613,14 +622,15 @@ async function runImport(){
   if(!list.length){msg.textContent='ไม่พบข้อมูลที่อ่านได้ ตรวจรูปแบบ วันที่ ชื่อค่า=ตัวเลข';return}
   $('impGo').disabled=true;msg.textContent='';
   try{
+    var upOk=0;upFail=0;upCode='';
     var latestDate=list.map(function(x){return x.date}).sort().pop();
     for(var i=0;i<list.length;i++){
       var ids=[];
-      if(assets){for(var j=0;j<picked.length;j++){if(imgDates[j]===list[i].date||(!imgDates[j]&&list[i].date===latestDate)){try{var u=await assets.upload(await shrink(picked[j]));ids.push(u.id)}catch(e){}}}}
+      for(var j=0;j<picked.length;j++){if(imgDates[j]===list[i].date||(!imgDates[j]&&list[i].date===latestDate)){var id=await upOne(picked[j]);if(id){ids.push(id);upOk++}}}
       await persist({date:list[i].date,values:list[i].values,note:'นำเข้าจากข้อความ',imageIds:ids,createdAt:Date.now()+i});
     }
     if(mode==='local')saveLocal();
-    $('addOv').hidden=true;refresh();
+    $('addOv').hidden=true;refresh();upNote(upOk);
   }catch(e){msg.textContent='บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง'}
   $('impGo').disabled=false;
 }
@@ -629,14 +639,14 @@ async function saveRec(){
   if(!Object.keys(values).length){$('saveMsg').textContent='กรอกอย่างน้อย 1 ค่า';return}
   var date=$('fdate').value||new Date().toISOString().slice(0,10);
   var btn=$('saveRec');btn.disabled=true;$('saveMsg').textContent='';
-  var ids=[];
-  if(assets&&picked.length){for(var i=0;i<picked.length;i++){try{var u=await assets.upload(picked[i]);ids.push(u.id)}catch(e){}}}
+  var ids=[];upFail=0;upCode='';
+  for(var i=0;i<picked.length;i++){var id=await upOne(picked[i]);if(id)ids.push(id)}
   var rec={date:date,values:values,note:$('fnote').value.trim(),imageIds:ids,createdAt:Date.now()};
   try{
     await persist(rec);
     $('addOv').hidden=true;
     var first=Object.keys(values)[0];if(first)selected=first;
-    refresh();
+    refresh();upNote(ids.length);
   }catch(e){$('saveMsg').textContent='บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง'}
   btn.disabled=false;
 }
