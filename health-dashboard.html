@@ -211,6 +211,14 @@ input[type=number]{width:90px}
       <button class="btn primary" id="readImg" type="button" disabled>ให้ Claude อ่านค่าจากภาพ</button>
       <div class="note" id="readMsg"></div>
     </div>
+    <details class="box" id="impBox">
+      <summary><b>นำเข้าค่าหลายครั้งตรวจพร้อมกัน</b> <span class="muted">(วางข้อความที่ได้จาก Claude ในแชท)</span></summary>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+        <div class="note">หนึ่งบรรทัดต่อหนึ่งครั้งตรวจ รูปแบบ <code>วันที่ ชื่อค่า=ตัวเลข</code> เช่น <code>2026-10-02 alt=52 hba1c=6.5</code> ชื่อค่าที่ใช้ได้: fbs, hba1c, chol, ldl, hdl, tg, crea, egfr, alt, ast, ua, hb, bmi, sbp, dbp</div>
+        <textarea id="impText" rows="6" style="width:100%;font-family:monospace" placeholder="2026-08-01 fbs=107 hba1c=6.4 chol=189 ldl=137 hdl=45 tg=121 alt=37 crea=0.67 egfr=109.32"></textarea>
+        <div class="row"><span class="note" id="impMsg"></span><button class="btn primary" id="impGo" type="button">นำเข้าและบันทึก</button></div>
+      </div>
+    </details>
     <div class="row" style="justify-content:flex-start">
       <label class="field" for="fdate">วันที่ตรวจ <input type="date" id="fdate"></label>
     </div>
@@ -487,14 +495,14 @@ function buildForm(){
 }
 function openAdd(){
   buildForm();picked=[];extracted={};$('prev').innerHTML='';$('files').value='';$('readMsg').textContent='';$('saveMsg').textContent='';$('fnote').value='';
-  $('fdate').value=new Date().toISOString().slice(0,10);$('readImg').disabled=true;
+  $('fdate').value=new Date().toISOString().slice(0,10);$('impText').value='';$('impMsg').textContent='';$('impBox').open=false;$('readImg').disabled=true;
   $('addOv').hidden=false;
 }
 function setPicked(fl){
   picked=Array.prototype.slice.call(fl).filter(function(f){return /^image\//.test(f.type)});
   $('prev').innerHTML=picked.map(function(f){return '<img src="'+URL.createObjectURL(f)+'" alt="ตัวอย่างภาพที่เลือก">'}).join('');
-  $('readImg').disabled=!picked.length||!sample||!canImg;
-  $('readMsg').textContent=!sample?'การอ่านภาพด้วย Claude ยังใช้ไม่ได้ในมุมมองนี้ กรอกค่าเองได้':!canImg?'มุมมองนี้ยังส่งภาพให้ Claude ไม่ได้ กรอกค่าเองได้':'';
+  $('readImg').disabled=!picked.length||!sample;
+  $('readMsg').textContent=!sample?'มุมมองนี้ยังเรียก Claude ไม่ได้ ใช้ "นำเข้าค่า" ด้านล่างหรือกรอกเอง ภาพยังแนบเก็บไว้กับผลตรวจได้':!canImg?'มุมมองนี้อาจยังส่งภาพให้ Claude ไม่ได้ ลองกดอ่านได้ หากไม่สำเร็จ ให้ส่งภาพให้ Claude ในแชทแล้ววางผลที่ช่อง "นำเข้าค่า"':'';
 }
 async function readImages(){
   var btn=$('readImg');btn.disabled=true;$('readMsg').textContent='Claude กำลังอ่านภาพ อาจใช้เวลาสักครู่…';
@@ -507,8 +515,35 @@ async function readImages(){
     M.forEach(function(m){var v=r&&r.values?r.values[m.k]:null;if(typeof v==='number'&&isFinite(v)){$('in-'+m.k).value=v;$('lb-'+m.k).classList.add('read');n++}});
     if(r&&/^\d{4}-\d{2}-\d{2}$/.test(r.date||''))$('fdate').value=r.date;
     $('readMsg').textContent=n?'อ่านได้ '+n+' ค่า กรุณาตรวจทานกับใบผลตรวจก่อนบันทึก':'อ่านค่าจากภาพไม่ได้ ลองภาพที่ชัดขึ้น หรือกรอกค่าเอง';
-  }catch(e){$('readMsg').textContent=e&&e.code==='images_unavailable'?'มุมมองนี้ยังส่งภาพให้ Claude ไม่ได้':errMsg(e)}
+  }catch(e){$('readMsg').textContent=e&&e.code==='images_unavailable'?'มุมมองนี้ส่งภาพให้ Claude ไม่ได้ ให้ส่งภาพในแชทกับ Claude แล้ววางผลที่ช่อง "นำเข้าค่า" ด้านบน':errMsg(e)}
   btn.disabled=!picked.length;
+}
+async function persist(rec){
+  if(mode==='db'&&col){await col.add(rec)}
+  else{rec.id='l-'+Date.now()+'-'+Math.floor(Math.random()*1e4);recs=recs.filter(function(r){return !r.demo}).concat([rec]);mode='local';saveLocal()}
+}
+function parseImport(t){
+  var out=[];t=(t||'').trim();if(!t)return out;
+  function clean(v){var o={};Object.keys(v||{}).forEach(function(k){k=String(k).toLowerCase();var n=+v[k];if(MK[k]&&isFinite(n))o[k]=n});return o}
+  if(t[0]==='['||t[0]==='{'){try{var j=JSON.parse(t);(Array.isArray(j)?j:[j]).forEach(function(r){var v=clean(r.values);if(/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')&&Object.keys(v).length)out.push({date:r.date,values:v})})}catch(e){}return out}
+  t.split('\n').forEach(function(line){
+    var m=line.match(/(\d{4}-\d{2}-\d{2})/);if(!m)return;
+    var rest=line.slice(m.index+10),re=/([a-z0-9]+)\s*[=:]\s*(-?\d+(?:\.\d+)?)/gi,x,v={};
+    while((x=re.exec(rest))){var k=x[1].toLowerCase();if(MK[k])v[k]=+x[2]}
+    if(Object.keys(v).length)out.push({date:m[1],values:v});
+  });
+  return out;
+}
+async function runImport(){
+  var list=parseImport($('impText').value),msg=$('impMsg');
+  if(!list.length){msg.textContent='ไม่พบข้อมูลที่อ่านได้ ตรวจรูปแบบ วันที่ ชื่อค่า=ตัวเลข';return}
+  $('impGo').disabled=true;msg.textContent='';
+  try{
+    for(var i=0;i<list.length;i++){await persist({date:list[i].date,values:list[i].values,note:'นำเข้าจากข้อความ',imageIds:[],createdAt:Date.now()+i})}
+    if(mode==='local')saveLocal();
+    $('addOv').hidden=true;refresh();
+  }catch(e){msg.textContent='บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง'}
+  $('impGo').disabled=false;
 }
 async function saveRec(){
   var values={};M.forEach(function(m){var v=$('in-'+m.k).value;if(v!==''&&isFinite(+v))values[m.k]=+v});
@@ -519,8 +554,7 @@ async function saveRec(){
   if(assets&&picked.length){for(var i=0;i<picked.length;i++){try{var u=await assets.upload(picked[i]);ids.push(u.id)}catch(e){}}}
   var rec={date:date,values:values,note:$('fnote').value.trim(),imageIds:ids,createdAt:Date.now()};
   try{
-    if(mode==='db'&&col){await col.add(rec)}
-    else{rec.id='l-'+Date.now();recs=recs.filter(function(r){return !r.demo}).concat([rec]);mode='local';saveLocal();refresh()}
+    await persist(rec);
     $('addOv').hidden=true;
     var first=Object.keys(values)[0];if(first)selected=first;
     refresh();
@@ -547,7 +581,7 @@ $('runAll').onclick=runAll;
 $('openAdd').onclick=openAdd;$('demoAdd').onclick=openAdd;
 $('closeAdd').onclick=function(){$('addOv').hidden=true};
 $('files').onchange=function(e){setPicked(e.target.files)};
-$('readImg').onclick=readImages;$('saveRec').onclick=saveRec;
+$('impGo').onclick=runImport;$('readImg').onclick=readImages;$('saveRec').onclick=saveRec;
 var dz=$('drop');
 ['dragenter','dragover'].forEach(function(n){dz.addEventListener(n,function(e){e.preventDefault();dz.classList.add('over')})});
 ['dragleave','drop'].forEach(function(n){dz.addEventListener(n,function(e){e.preventDefault();dz.classList.remove('over')})});
