@@ -142,6 +142,9 @@ input[type=number]{width:90px}
 .galrow .th button{padding:0;border:1px solid var(--line);border-radius:8px;background:var(--surface2);overflow:hidden;display:block}
 .galrow .th img{height:96px;width:auto;max-width:100%;display:block}
 #lb[hidden]{display:none!important}
+.pv{position:relative;display:inline-block}
+.pv .x,.tw .x{position:absolute;top:4px;right:4px;border:0;border-radius:6px;background:rgba(10,20,22,.78);color:#fff;font-size:12px;padding:1px 7px;line-height:1.6}
+.tw{position:relative;display:inline-block}
 #repHost{position:fixed;left:-10000px;top:0;width:760px;pointer-events:none}
 .rep{--bg:#FFFFFF;--surface:#FFFFFF;--surface2:#F7FAFA;--ink:#11292B;--ink2:#4B6466;--line:#D6E1E1;--accent:#0C7C86;--good:#1B8449;--good-bg:#DDF2E5;--warn:#A8690B;--warn-bg:#FBEBCB;--bad:#C0352D;--bad-bg:#FADAD6;--band:rgba(27,132,73,.12);
   background:var(--bg);color:var(--ink);font:400 13px/1.55 var(--f-body);padding:4px 2px;width:760px}
@@ -252,6 +255,7 @@ input[type=number]{width:90px}
     </details>
     <div class="row" style="justify-content:flex-start">
       <label class="field" for="fdate">วันที่ตรวจ <input type="date" id="fdate"></label>
+      <span class="note">เว้นว่างได้ ระบบอ่านวันที่จากภาพ ถ้าอ่านไม่ได้จะใช้วันนี้</span>
     </div>
     <div class="note">ตรวจทานค่าที่อ่านได้ (ช่องสีฟ้า) แก้ไขได้ และเว้นว่างค่าที่ไม่มีในใบผลตรวจ</div>
     <div id="formGroups"></div>
@@ -522,21 +526,25 @@ async function delRec(id){
 function saveLocal(){try{localStorage.setItem('hd_recs',JSON.stringify(recs.map(function(r){return {id:r.id,date:r.date,values:r.values,note:r.note,imageIds:r.imageIds||[]}})))}catch(e){}}
 
 /* ---------- add panel ---------- */
-var picked=[],extracted={};
+var picked=[],imgDates=[],extracted={};
 function buildForm(){
   $('formGroups').innerHTML=GROUPS.map(function(g){return '<div class="group"><h3>'+esc(g)+'</h3><div class="form">'+M.filter(function(m){return m.g===g}).map(function(m){
     return '<label for="in-'+m.k+'" id="lb-'+m.k+'"><span>'+esc(m.t)+'<small>'+esc(m.u)+' · ปกติ '+refText(m)+'</small></span><input type="number" step="any" inputmode="decimal" id="in-'+m.k+'"></label>'}).join('')+'</div></div>'}).join('');
 }
 function openAdd(){
   buildForm();picked=[];extracted={};$('prev').innerHTML='';$('files').value='';$('readMsg').textContent='';$('saveMsg').textContent='';$('fnote').value='';
-  $('fdate').value=new Date().toISOString().slice(0,10);$('impText').value='';$('impMsg').textContent='';$('impBox').open=false;$('readImg').disabled=true;
+  $('fdate').value='';$('impText').value='';$('impMsg').textContent='';$('impBox').open=false;$('readImg').disabled=true;
   $('addOv').hidden=false;
 }
-function setPicked(fl){
-  picked=Array.prototype.slice.call(fl).filter(function(f){return /^image\//.test(f.type)});
-  $('prev').innerHTML=picked.map(function(f){return '<img src="'+URL.createObjectURL(f)+'" alt="ตัวอย่างภาพที่เลือก">'}).join('');
+function renderPrev(){
+  $('prev').innerHTML=picked.map(function(f,i){return '<span class="pv"><img src="'+URL.createObjectURL(f)+'" alt="ภาพที่เลือก '+(i+1)+'"><button class="x" type="button" data-rmpick="'+i+'" aria-label="เอาภาพนี้ออก">ลบ</button></span>'}).join('');
   $('readImg').disabled=!picked.length||!sample;
-  $('readMsg').textContent=!sample?'มุมมองนี้ยังเรียก Claude ไม่ได้ ใช้ "นำเข้าค่า" ด้านล่างหรือกรอกเอง ภาพยังแนบเก็บไว้กับผลตรวจได้':!canImg?'มุมมองนี้อาจยังส่งภาพให้ Claude ไม่ได้ ลองกดอ่านได้ หากไม่สำเร็จ ให้ส่งภาพให้ Claude ในแชทแล้ววางผลที่ช่อง "นำเข้าค่า"':'';
+}
+function setPicked(fl){
+  picked=Array.prototype.slice.call(fl).filter(function(f){return /^image\//.test(f.type)});imgDates=[];
+  renderPrev();
+  $('readMsg').textContent=!sample?'มุมมองนี้ยังเรียก Claude ไม่ได้ ใช้ "นำเข้าค่า" ด้านล่างหรือกรอกเอง ภาพยังแนบเก็บไว้กับผลตรวจได้':!canImg?'มุมมองนี้อาจยังส่งภาพให้ Claude ไม่ได้ หากอ่านไม่สำเร็จ ให้ส่งภาพให้ Claude ในแชทแล้ววางผลที่ช่อง "นำเข้าค่า"':'';
+  if(sample&&picked.length)readImages();
 }
 async function shrink(f){
   try{
@@ -547,7 +555,7 @@ async function shrink(f){
   }catch(e){return f}
 }
 async function readImages(){
-  var btn=$('readImg'),msg=$('readMsg');btn.disabled=true;
+  var btn=$('readImg'),msg=$('readMsg');btn.disabled=true;imgDates=[];
   var list=M.map(function(m){return m.k+' = '+m.t+' ('+m.u+')'}).join('\n');
   var prompt='ภาพที่แนบคือใบรายงานผลตรวจสุขภาพหรือผลแล็บ อ่านค่าตัวเลขที่เห็นจริงในภาพเท่านั้น ห้ามเดา\nรายการค่าที่ต้องการ (key = ชื่อ (หน่วย)):\n'+list+
    '\n\nกติกา: แปลงหน่วยให้ตรงกับหน่วยที่ระบุ (เช่น mmol/L เป็น mg/dL) ใส่เฉพาะค่าที่อ่านได้ชัด ความดันโลหิตให้แยก sbp และ dbp วันที่ให้แปลงปี พ.ศ. เป็น ค.ศ. (ลบ 543) รูปแบบ YYYY-MM-DD\n'+
@@ -564,7 +572,7 @@ async function readImages(){
     try{
       var blob=await shrink(picked[i]);
       var r=await sample.json(prompt,{images:[blob],modelTier:'default',cache:false});
-      if(r){add(r.date,r.values,false);ok++}
+      if(r){add(r.date,r.values,false);imgDates[i]=/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')?r.date:null;ok++}
     }catch(e){lastErr=e;if(e&&(e.code==='images_unavailable'||e.code==='not_granted'))break}
   }
   var dates=Object.keys(found).filter(function(d){return Object.keys(found[d]).length}).sort();
@@ -586,8 +594,8 @@ async function readImages(){
   btn.disabled=!picked.length;
 }
 async function persist(rec){
-  if(mode==='db'&&col){await col.add(rec)}
-  else{rec.id='l-'+Date.now()+'-'+Math.floor(Math.random()*1e4);recs=recs.filter(function(r){return !r.demo}).concat([rec]);mode='local';saveLocal()}
+  if(mode==='db'&&col){var ref=await col.add(rec);return ref.id}
+  rec.id='l-'+Date.now()+'-'+Math.floor(Math.random()*1e4);recs=recs.filter(function(r){return !r.demo}).concat([rec]);mode='local';saveLocal();return rec.id;
 }
 function parseImport(t){
   var out=[];t=(t||'').trim();if(!t)return out;
@@ -606,7 +614,11 @@ async function runImport(){
   if(!list.length){msg.textContent='ไม่พบข้อมูลที่อ่านได้ ตรวจรูปแบบ วันที่ ชื่อค่า=ตัวเลข';return}
   $('impGo').disabled=true;msg.textContent='';
   try{
-    for(var i=0;i<list.length;i++){await persist({date:list[i].date,values:list[i].values,note:'นำเข้าจากข้อความ',imageIds:[],createdAt:Date.now()+i})}
+    for(var i=0;i<list.length;i++){
+      var ids=[];
+      if(assets){for(var j=0;j<picked.length;j++){if(imgDates[j]===list[i].date){try{var u=await assets.upload(await shrink(picked[j]));ids.push(u.id)}catch(e){}}}}
+      await persist({date:list[i].date,values:list[i].values,note:'นำเข้าจากข้อความ',imageIds:ids,createdAt:Date.now()+i});
+    }
     if(mode==='local')saveLocal();
     $('addOv').hidden=true;refresh();
   }catch(e){msg.textContent='บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง'}
@@ -615,7 +627,7 @@ async function runImport(){
 async function saveRec(){
   var values={};M.forEach(function(m){var v=$('in-'+m.k).value;if(v!==''&&isFinite(+v))values[m.k]=+v});
   if(!Object.keys(values).length){$('saveMsg').textContent='กรอกอย่างน้อย 1 ค่า';return}
-  var date=$('fdate').value;if(!date){$('saveMsg').textContent='เลือกวันที่ตรวจ';return}
+  var date=$('fdate').value||new Date().toISOString().slice(0,10);
   var btn=$('saveRec');btn.disabled=true;$('saveMsg').textContent='';
   var ids=[];
   if(assets&&picked.length){for(var i=0;i<picked.length;i++){try{var u=await assets.upload(picked[i]);ids.push(u.id)}catch(e){}}}
@@ -685,15 +697,29 @@ async function savePdf(){
 }
 
 /* ---------- gallery ---------- */
-var attachTarget=null;
+var attachTarget=null,confirmImg=null;
 function renderGallery(){
   var rs=sorted().reverse().filter(function(r){return !r.demo});
   if(!rs.length){$('gallery').innerHTML='<div class="box">ยังไม่มีผลตรวจที่บันทึก เมื่อบันทึกผลตรวจแล้ว จะแนบภาพใบผลตรวจของแต่ละครั้งได้ที่นี่</div>';return}
   $('gallery').innerHTML='<div class="gal">'+rs.map(function(r){
     var ids=r.imageIds||[];
     return '<div class="galrow"><div class="d">'+dateTh(r.date)+'</div><div class="th">'+
-      (ids.length?ids.map(function(id){return '<button type="button" data-lb="'+esc(id)+'" aria-label="ดูภาพขยาย"><img src="/_blob/'+esc(id)+'" alt="ภาพใบผลตรวจ '+esc(dateTh(r.date))+'"></button>'}).join(''):'<span class="muted">ยังไม่มีภาพ</span>')+
+      (ids.length?ids.map(function(id){var key=r.id+'|'+id;return '<span class="tw"><button type="button" data-lb="'+esc(id)+'" aria-label="ดูภาพขยาย"><img src="/_blob/'+esc(id)+'" alt="ภาพใบผลตรวจ '+esc(dateTh(r.date))+'"></button><button class="x" type="button" data-delrec="'+esc(r.id)+'" data-delimg="'+esc(id)+'">'+(confirmImg===key?'ยืนยันลบ':'ลบ')+'</button></span>'}).join(''):'<span class="muted">ยังไม่มีภาพ</span>')+
       '</div><button class="btn sm" type="button" data-attach="'+esc(r.id)+'">+ เพิ่มภาพ</button></div>'}).join('')+'</div>';
+}
+async function delImage(recId,imgId){
+  var key=recId+'|'+imgId,msg=$('galMsg');
+  if(confirmImg!==key){confirmImg=key;renderGallery();return}
+  confirmImg=null;
+  var r=recs.filter(function(x){return x.id===recId})[0];if(!r)return;
+  var ids=(r.imageIds||[]).filter(function(x){return x!==imgId});
+  try{
+    if(mode==='db'&&col){await col.doc(recId).update({imageIds:ids})}
+    else{r.imageIds=ids;saveLocal();refresh()}
+    if(assets){try{await assets.delete(imgId)}catch(e){}}
+    msg.textContent='ลบภาพแล้ว';
+  }catch(e){msg.textContent='ลบภาพไม่สำเร็จ ลองใหม่อีกครั้ง'}
+  renderGallery();
 }
 async function attachImages(files){
   var msg=$('galMsg'),r=recs.filter(function(x){return x.id===attachTarget})[0];
@@ -723,6 +749,8 @@ function select(k){selected=k;renderCards();renderDetail();if(window.innerWidth<
 document.addEventListener('click',function(e){
   var t=e.target.closest('[data-k]');if(t){select(t.getAttribute('data-k'));return}
   t=e.target.closest('[data-f]');if(t){filter=t.getAttribute('data-f');renderFilters();renderCards();return}
+  t=e.target.closest('[data-delimg]');if(t){delImage(t.getAttribute('data-delrec'),t.getAttribute('data-delimg'));return}
+  t=e.target.closest('[data-rmpick]');if(t){var ix=+t.getAttribute('data-rmpick');picked.splice(ix,1);imgDates.splice(ix,1);renderPrev();return}
   t=e.target.closest('[data-attach]');if(t){attachTarget=t.getAttribute('data-attach');$('galMsg').textContent='';$('attachFile').click();return}
   t=e.target.closest('[data-lb]');if(t){$('lbImg').src='/_blob/'+t.getAttribute('data-lb');$('lb').hidden=false;return}
   t=e.target.closest('[data-del]');if(t){delRec(t.getAttribute('data-del'));return}
