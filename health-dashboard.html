@@ -504,18 +504,51 @@ function setPicked(fl){
   $('readImg').disabled=!picked.length||!sample;
   $('readMsg').textContent=!sample?'มุมมองนี้ยังเรียก Claude ไม่ได้ ใช้ "นำเข้าค่า" ด้านล่างหรือกรอกเอง ภาพยังแนบเก็บไว้กับผลตรวจได้':!canImg?'มุมมองนี้อาจยังส่งภาพให้ Claude ไม่ได้ ลองกดอ่านได้ หากไม่สำเร็จ ให้ส่งภาพให้ Claude ในแชทแล้ววางผลที่ช่อง "นำเข้าค่า"':'';
 }
+async function shrink(f){
+  try{
+    var bmp=await createImageBitmap(f),sc=Math.min(1,2200/Math.max(bmp.width,bmp.height));
+    var c=document.createElement('canvas');c.width=Math.round(bmp.width*sc);c.height=Math.round(bmp.height*sc);
+    c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+    return await new Promise(function(res){c.toBlob(function(x){res(x||f)},'image/jpeg',0.92)});
+  }catch(e){return f}
+}
 async function readImages(){
-  var btn=$('readImg');btn.disabled=true;$('readMsg').textContent='Claude กำลังอ่านภาพ อาจใช้เวลาสักครู่…';
+  var btn=$('readImg'),msg=$('readMsg');btn.disabled=true;
   var list=M.map(function(m){return m.k+' = '+m.t+' ('+m.u+')'}).join('\n');
   var prompt='ภาพที่แนบคือใบรายงานผลตรวจสุขภาพหรือผลแล็บ อ่านค่าตัวเลขที่เห็นจริงในภาพเท่านั้น ห้ามเดา\nรายการค่าที่ต้องการ (key = ชื่อ (หน่วย)):\n'+list+
-   '\n\nกติกา: แปลงหน่วยให้ตรงกับหน่วยที่ระบุ (เช่น mmol/L เป็น mg/dL) ใส่เฉพาะค่าที่อ่านได้ชัด ความดันโลหิตให้แยก sbp และ dbp วันที่ตรวจให้แปลงปี พ.ศ. เป็น ค.ศ. รูปแบบ YYYY-MM-DD ถ้าไม่พบให้เป็น null\nตอบเป็น JSON อย่างเดียว: {"date": "YYYY-MM-DD หรือ null", "values": {"key": ตัวเลข}}';
-  try{
-    var r=await sample.json(prompt,{images:picked,modelTier:'default'});
-    var n=0;
-    M.forEach(function(m){var v=r&&r.values?r.values[m.k]:null;if(typeof v==='number'&&isFinite(v)){$('in-'+m.k).value=v;$('lb-'+m.k).classList.add('read');n++}});
-    if(r&&/^\d{4}-\d{2}-\d{2}$/.test(r.date||''))$('fdate').value=r.date;
-    $('readMsg').textContent=n?'อ่านได้ '+n+' ค่า กรุณาตรวจทานกับใบผลตรวจก่อนบันทึก':'อ่านค่าจากภาพไม่ได้ ลองภาพที่ชัดขึ้น หรือกรอกค่าเอง';
-  }catch(e){$('readMsg').textContent=e&&e.code==='images_unavailable'?'มุมมองนี้ส่งภาพให้ Claude ไม่ได้ ให้ส่งภาพในแชทกับ Claude แล้ววางผลที่ช่อง "นำเข้าค่า" ด้านบน':errMsg(e)}
+   '\n\nกติกา: แปลงหน่วยให้ตรงกับหน่วยที่ระบุ (เช่น mmol/L เป็น mg/dL) ใส่เฉพาะค่าที่อ่านได้ชัด ความดันโลหิตให้แยก sbp และ dbp วันที่ให้แปลงปี พ.ศ. เป็น ค.ศ. (ลบ 543) รูปแบบ YYYY-MM-DD\n'+
+   '"date" คือวันที่ออกผล (Result Date) ของใบนี้ "values" คือคอลัมน์ Result ส่วน "previous" คือคอลัมน์ Prev.Result/Date แยกเป็นรายการตามวันที่ของแต่ละค่า\n'+
+   'ตอบเป็น JSON อย่างเดียว: {"date":"YYYY-MM-DD หรือ null","values":{"key":ตัวเลข},"previous":[{"date":"YYYY-MM-DD","values":{"key":ตัวเลข}}]}';
+  var found={},ok=0,lastErr=null;
+  function clean(v){var o={};Object.keys(v||{}).forEach(function(k){var n=+v[k];if(MK[k]&&typeof v[k]!=='boolean'&&isFinite(n))o[k]=n});return o}
+  function add(d,v,weak){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(d||''))return;v=clean(v);
+    var t=found[d]||(found[d]={});Object.keys(v).forEach(function(k){if(!(weak&&t[k]!=null))t[k]=v[k]});
+  }
+  for(var i=0;i<picked.length;i++){
+    msg.textContent='Claude กำลังอ่านภาพที่ '+(i+1)+' จาก '+picked.length+' อาจใช้เวลาสักครู่…';
+    try{
+      var blob=await shrink(picked[i]);
+      var r=await sample.json(prompt,{images:[blob],modelTier:'default',cache:false});
+      if(r){add(r.date,r.values,false);(Array.isArray(r.previous)?r.previous:[]).forEach(function(q){add(q&&q.date,q&&q.values,true)});ok++}
+    }catch(e){lastErr=e;if(e&&(e.code==='images_unavailable'||e.code==='not_granted'))break}
+  }
+  var dates=Object.keys(found).filter(function(d){return Object.keys(found[d]).length}).sort();
+  if(!dates.length){
+    var code=lastErr&&lastErr.code;
+    msg.textContent=code==='images_unavailable'?'มุมมองนี้ส่งภาพให้ Claude ไม่ได้ ให้ส่งภาพในแชทกับ Claude แล้ววางผลที่ช่อง "นำเข้าค่า" ด้านบน':
+      (lastErr?errMsg(lastErr)+' (รหัส '+(code||'ไม่ทราบ')+')':'อ่านค่าจากภาพไม่ได้ ลองภาพที่ชัดขึ้น หรือกรอกค่าเอง');
+    btn.disabled=!picked.length;return;
+  }
+  if(dates.length===1){
+    var d=dates[0],n=0;$('fdate').value=d;
+    M.forEach(function(m){var v=found[d][m.k];if(v!=null){$('in-'+m.k).value=v;$('lb-'+m.k).classList.add('read');n++}});
+    msg.textContent='อ่านได้ '+n+' ค่า ของวันที่ '+dateTh(d)+' กรุณาตรวจทานกับใบผลตรวจก่อนบันทึก';
+  }else{
+    $('impText').value=dates.map(function(d){return d+' '+Object.keys(found[d]).map(function(k){return k+'='+found[d][k]}).join(' ')}).join('\n');
+    $('impBox').open=true;
+    msg.textContent='พบผลตรวจ '+dates.length+' วันที่ (รวมค่าครั้งก่อนในใบ) ใส่ไว้ในช่อง "นำเข้าค่า" แล้ว ตรวจทานและกด "นำเข้าและบันทึก"';
+  }
   btn.disabled=!picked.length;
 }
 async function persist(rec){
