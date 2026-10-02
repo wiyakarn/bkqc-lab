@@ -142,6 +142,15 @@ input[type=number]{width:90px}
 .galrow .th button{padding:0;border:1px solid var(--line);border-radius:8px;background:var(--surface2);overflow:hidden;display:block}
 .galrow .th img{height:96px;width:auto;max-width:100%;display:block}
 #lb[hidden]{display:none!important}
+#repHost{position:fixed;left:-10000px;top:0;width:760px;pointer-events:none}
+.rep{--bg:#FFFFFF;--surface:#FFFFFF;--surface2:#F7FAFA;--ink:#11292B;--ink2:#4B6466;--line:#D6E1E1;--accent:#0C7C86;--good:#1B8449;--good-bg:#DDF2E5;--warn:#A8690B;--warn-bg:#FBEBCB;--bad:#C0352D;--bad-bg:#FADAD6;--band:rgba(27,132,73,.12);
+  background:var(--bg);color:var(--ink);font:400 13px/1.55 var(--f-body);padding:4px 2px;width:760px}
+.rep h1{font-size:24px}.rep h2{font-size:16px;margin-bottom:6px}
+.rep .rh{display:flex;flex-direction:column;gap:4px;border-bottom:2px solid var(--accent);padding-bottom:10px}
+.rep .rd{color:var(--warn);font-weight:600}
+.rep table{width:100%}.rep th,.rep td{white-space:normal;vertical-align:middle;padding:5px 6px}
+.rep .spark{width:110px}
+.rep .grp{color:var(--ink2);font-size:11px}
 
 @media (max-width:900px){
   .summary{grid-template-columns:1fr}
@@ -156,10 +165,15 @@ input[type=number]{width:90px}
     <div>
       <h1>สมุดผลตรวจสุขภาพ</h1>
       <p class="muted">ติดตามค่าเลือดและค่าร่างกายแต่ละปี ดูแนวโน้ม และรับคำอธิบายพร้อมแนวทางป้องกันเบื้องต้น</p>
+      <p class="note" id="syncNote"></p>
     </div>
-    <button class="btn primary" id="openAdd" type="button">+ เพิ่มผลตรวจ</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" id="pdfBtn" type="button" hidden>ดาวน์โหลดรายงาน PDF</button>
+      <button class="btn primary" id="openAdd" type="button">+ เพิ่มผลตรวจ</button>
+    </div>
   </header>
 
+  <div class="note" id="pdfMsg" role="status"></div>
   <div class="demo" id="demoBar" hidden>
     <span><b>ข้อมูลตัวอย่าง</b> ตัวเลขด้านล่างเป็นตัวอย่างสมมติ ไม่ใช่ผลตรวจของคุณ</span>
     <button class="btn sm" id="demoAdd" type="button">บันทึกผลตรวจจริงของฉัน</button>
@@ -250,6 +264,9 @@ input[type=number]{width:90px}
   </div>
 </div>
 
+<div id="repHost" aria-hidden="true"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 (function(){
 'use strict';
@@ -419,7 +436,7 @@ function renderCards(){
 }
 
 /* ---------- detail ---------- */
-var aiAbort=null;
+var aiAbort=null,lastAll='',downloads=null;
 function renderDetail(){
   var m=MK[selected],s=series(selected),el=$('detail');
   if(!m||!s.length){el.innerHTML='<h2>เลือกค่าตรวจ</h2><div class="muted">กดการ์ดทางซ้ายเพื่อดูกราฟแนวโน้มและคำแนะนำ</div>';return}
@@ -467,7 +484,7 @@ async function runAI(prompt,target,runBtn,stopBtn){
   runBtn.disabled=true;stopBtn.hidden=false;stopBtn.onclick=function(){ac.abort()};
   try{
     var r=await sample(prompt,{signal:ac.signal,modelTier:'default',onText:function(x){target.innerHTML=mdHtml(x.text)}});
-    target.innerHTML=mdHtml(r.text);
+    target.innerHTML=mdHtml(r.text);if(target.id==='aiAll')lastAll=r.text;
   }catch(e){
     if(e&&e.code==='cancelled'){if(e.text)target.innerHTML=mdHtml(e.text)}
     else target.innerHTML=(e&&e.text?mdHtml(e.text):'')+'<div class="err">'+errMsg(e)+'</div>';
@@ -612,6 +629,61 @@ async function saveRec(){
   btn.disabled=false;
 }
 
+/* ---------- PDF report ---------- */
+function reportBlocks(){
+  var lv=latestVals(),ms=M.filter(function(m){return lv[m.k]}),rs=sorted(),last=rs[rs.length-1];
+  var isDemo=rs.every(function(r){return r.demo}),cnt={good:0,warn:0,bad:0};
+  ms.forEach(function(m){cnt[status(m,lv[m.k].v)]++});
+  var today=new Date().toISOString().slice(0,10),prof=(profile.age||profile.sex)?' · '+who():'';
+  var blocks=['<div class="rh"><h1>สมุดผลตรวจสุขภาพ</h1><div class="muted">ออกรายงานวันที่ '+dateTh(today)+prof+'</div>'+
+    (isDemo?'<div class="rd">ข้อมูลตัวอย่าง ไม่ใช่ผลตรวจจริง</div>':'')+
+    '<div>ผลตรวจล่าสุด <b>'+(last?dateTh(last.date):'-')+'</b> · ตรวจแล้ว '+rs.length+' ครั้ง · '+ms.length+' รายการ</div>'+
+    '<div>ปกติ <b>'+cnt.good+'</b> · เฝ้าระวัง <b>'+cnt.warn+'</b> · ผิดปกติ <b>'+cnt.bad+'</b></div></div>'];
+  function row(m){var s=series(m.k),p=s[s.length-1],pv=s.length>1?s[s.length-2]:null;
+    return '<tr><td><b>'+esc(m.t)+'</b><div class="grp">'+esc(m.g)+'</div></td><td class="num"><b>'+fmt(m,p.v)+'</b> '+esc(m.u)+'<div class="grp">'+dateTh(p.date)+'</div></td><td>'+pill(m,p.v)+'</td><td class="num">'+refText(m)+'</td><td class="num">'+(pv?fmt(m,pv.v)+'<div class="grp">'+dateTh(pv.date,true)+'</div>':'-')+'</td><td>'+sparkline(m,s)+'</td></tr>'}
+  for(var i=0;i<ms.length;i+=9){
+    blocks.push('<div class="tbl"><table><thead><tr><th>ค่าตรวจ</th><th>ผลล่าสุด</th><th>สถานะ</th><th>ช่วงปกติ</th><th>ครั้งก่อน</th><th>แนวโน้ม</th></tr></thead><tbody>'+ms.slice(i,i+9).map(row).join('')+'</tbody></table></div>');
+  }
+  var adv=ms.filter(function(m){return status(m,lv[m.k].v)!=='good'}).map(function(m){var sd=side(m,lv[m.k].v),t=(TIPS[m.k]||{})[sd];return t?'<div class="box"><h4>'+esc(m.t)+' '+fmt(m,lv[m.k].v)+' '+esc(m.u)+'</h4><ul>'+t.map(function(x){return '<li>'+esc(x)+'</li>'}).join('')+'</ul></div>':''});
+  adv=adv.filter(Boolean);if(adv.length){adv[0]='<h2>แนวทางป้องกันเบื้องต้นสำหรับค่าที่ควรใส่ใจ</h2>'+adv[0];adv.forEach(function(b){blocks.push(b)})}
+  if(lastAll)blocks.push('<div class="ai"><h2>วิเคราะห์ภาพรวมโดย Claude</h2>'+mdHtml(lastAll)+'</div>');
+  blocks.push('<div class="note">รายงานนี้ใช้เพื่อความเข้าใจเบื้องต้น ไม่ใช่การวินิจฉัยโรค ค่าอ้างอิงแตกต่างกันตามห้องปฏิบัติการ อายุ และเพศ โปรดปรึกษาแพทย์เพื่อแปลผลที่แน่นอน</div>');
+  return blocks;
+}
+async function buildPdf(){
+  var host=$('repHost'),blocks=reportBlocks(),jsPDF=window.jspdf.jsPDF,doc=new jsPDF({unit:'pt',format:'a4'});
+  var PW=doc.internal.pageSize.getWidth(),PH=doc.internal.pageSize.getHeight(),MG=28,W=PW-2*MG,y=MG;
+  try{await Promise.race([document.fonts.ready,new Promise(function(r){setTimeout(r,3000)})])}catch(e){}
+  for(var i=0;i<blocks.length;i++){
+    host.innerHTML='<div class="rep">'+blocks[i]+'</div>';
+    var cv=await window.html2canvas(host.firstChild,{scale:2,backgroundColor:'#ffffff',logging:false});
+    var h=cv.height/cv.width*W,room=PH-MG-y;
+    if(h<=room){doc.addImage(cv.toDataURL('image/jpeg',.92),'JPEG',MG,y,W,h);y+=h+10;continue}
+    if(y>MG){doc.addPage();y=MG}
+    if(h<=PH-2*MG){doc.addImage(cv.toDataURL('image/jpeg',.92),'JPEG',MG,y,W,h);y+=h+10;continue}
+    var slice=Math.floor((PH-2*MG)/W*cv.width),off=0;
+    while(off<cv.height){
+      var sh=Math.min(slice,cv.height-off),sc=document.createElement('canvas');sc.width=cv.width;sc.height=sh;
+      sc.getContext('2d').drawImage(cv,0,off,cv.width,sh,0,0,cv.width,sh);
+      if(off>0){doc.addPage();y=MG}
+      var shh=sh/cv.width*W;doc.addImage(sc.toDataURL('image/jpeg',.92),'JPEG',MG,MG,W,shh);y=MG+shh+10;off+=sh;
+    }
+  }
+  host.innerHTML='';
+  return doc.output('arraybuffer');
+}
+async function savePdf(){
+  var btn=$('pdfBtn'),msg=$('pdfMsg');btn.disabled=true;msg.textContent='กำลังสร้างรายงาน PDF…';
+  try{
+    var ab=await buildPdf();
+    await downloads.save({filename:'health-report-'+new Date().toISOString().slice(0,10)+'.pdf',data:new Blob([ab],{type:'application/pdf'})});
+    msg.textContent='สร้างรายงานแล้ว';
+  }catch(e){
+    msg.textContent=e&&e.code==='declined'?'ยกเลิกการบันทึกไฟล์':'สร้างหรือบันทึก PDF ไม่สำเร็จ'+(e&&e.code?' (รหัส '+e.code+')':'');
+  }
+  btn.disabled=false;
+}
+
 /* ---------- gallery ---------- */
 var attachTarget=null;
 function renderGallery(){
@@ -658,6 +730,7 @@ document.addEventListener('click',function(e){
 });
 $('attachFile').onchange=function(e){var f=Array.prototype.slice.call(e.target.files);e.target.value='';attachImages(f)};
 $('lb').onclick=function(){$('lb').hidden=true};
+$('pdfBtn').onclick=savePdf;
 $('runAll').onclick=runAll;
 $('openAdd').onclick=openAdd;$('demoAdd').onclick=openAdd;
 $('closeAdd').onclick=function(){$('addOv').hidden=true};
@@ -682,10 +755,12 @@ refresh();
     if(sample){try{var l=await sample.limits();canImg=!!(l&&l.images);if(canImg)$('files').accept=l.images.mediaTypes.join(',')}catch(e){}}
     $('runAll').disabled=!sample;renderDetail();
     assets=await c.use('assets');
+    downloads=await c.use('downloads');
+    $('pdfBtn').hidden=!(downloads&&window.jspdf&&window.html2canvas);
     var db=await c.use('db'),user=await c.use('user');
     if(db&&user&&user.id){
       var uid=await user.id();
-      col=db.collection('data/users/'+uid+'/checkups');mode='db';
+      col=db.collection('data/users/'+uid+'/checkups');mode='db';$('syncNote').textContent='บันทึกไว้ในบัญชีของคุณ เปิดดูได้ทุกเครื่องที่ล็อกอินบัญชีเดียวกัน';
       col.onSnapshot(function(snap){
         recs=snap.docs.map(function(d){var o=d.data()||{};o.id=d.id;return o}).filter(function(r){return r.date&&r.values});
         refresh();
@@ -693,6 +768,7 @@ refresh();
       return;
     }
   }catch(e){}
+  $('syncNote').textContent='ข้อมูลบันทึกในเบราว์เซอร์เครื่องนี้เท่านั้น ล็อกอินเพื่อใช้ข้ามเครื่อง';
   try{var saved=JSON.parse(localStorage.getItem('hd_recs')||'null');if(saved&&saved.length){recs=saved;mode='local';refresh()}}catch(e){}
   if(!sample)$('runAll').disabled=true;
 })();
