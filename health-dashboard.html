@@ -7,19 +7,19 @@
   --bg:#F2F6F6; --surface:#FFFFFF; --surface2:#F7FAFA; --ink:#11292B; --ink2:#4B6466; --line:#D6E1E1;
   --accent:#0C7C86; --accent-ink:#FFFFFF; --accent-soft:#DCF0F1;
   --good:#1B8449; --good-bg:#DDF2E5; --warn:#A8690B; --warn-bg:#FBEBCB; --bad:#C0352D; --bad-bg:#FADAD6;
-  --band:rgba(27,132,73,.12);
+  --band:rgba(27,132,73,.12); --wband:rgba(168,105,11,.10); --bband:rgba(192,53,45,.08); --c2:#5A62A8; --c3:#B4C3C4;
   --f-display:'Anuphan','Noto Sans Thai',system-ui,sans-serif; --f-body:'Noto Sans Thai','Anuphan',system-ui,sans-serif;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0D1819; --surface:#152325; --surface2:#112022; --ink:#E3EEEE; --ink2:#9CB3B5; --line:#26393B;
   --accent:#4EC4CD; --accent-ink:#06191B; --accent-soft:#163A3E;
   --good:#58C686; --good-bg:#173A29; --warn:#E3AB4D; --warn-bg:#403115; --bad:#F2796F; --bad-bg:#47201D;
-  --band:rgba(88,198,134,.14); color-scheme:dark}}
+  --band:rgba(88,198,134,.14); --wband:rgba(227,171,77,.12); --bband:rgba(242,121,111,.10); --c2:#A3A9EC; --c3:#4D6365; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0D1819; --surface:#152325; --surface2:#112022; --ink:#E3EEEE; --ink2:#9CB3B5; --line:#26393B;
   --accent:#4EC4CD; --accent-ink:#06191B; --accent-soft:#163A3E;
   --good:#58C686; --good-bg:#173A29; --warn:#E3AB4D; --warn-bg:#403115; --bad:#F2796F; --bad-bg:#47201D;
-  --band:rgba(88,198,134,.14); color-scheme:dark}
+  --band:rgba(88,198,134,.14); --wband:rgba(227,171,77,.12); --bband:rgba(242,121,111,.10); --c2:#A3A9EC; --c3:#4D6365; color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{background:var(--bg);color:var(--ink);font:400 15px/1.6 var(--f-body);margin:0;padding-inline:16px;padding-block:20px 64px}
@@ -140,6 +140,23 @@ input[type=number]{width:90px}
 .gal .th button:not(.x){padding:0;border:1px solid var(--line);border-radius:8px;background:var(--surface2);overflow:hidden;display:block}
 .gal .th img{height:120px;width:auto;max-width:100%;display:block}
 #lb[hidden]{display:none!important}
+.grp{color:var(--ink2);font-size:12px}
+.reltbl td:first-child{white-space:normal;min-width:200px}
+.relgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:14px}
+.relgrid>*{min-width:0}
+.lgd{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink2)}
+.lgd span{display:inline-flex;align-items:center;gap:6px}
+.lgd i{display:inline-block;width:14px;height:3px;border-radius:2px}
+.lgd i.sq{height:10px;width:10px;border-radius:3px}
+.lbar{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.lbar .trk{position:relative;display:flex;gap:2px;height:16px}
+.lbar .trk i{display:block;height:100%;border-radius:3px}
+.lbar .ref{position:absolute;top:-3px;bottom:-3px;width:0;border-left:2px dashed var(--ink2)}
+.chk{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+.chk li{display:flex;gap:8px;align-items:baseline}
+.chk b.ic{width:1.4em;text-align:center;flex:none}
+.mcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:10px}
+.mcards .box h4{display:flex;justify-content:space-between;gap:8px}
 .vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
 .drop{cursor:pointer}
 .drop:focus-within{border-color:var(--accent)}
@@ -211,6 +228,12 @@ input[type=number]{width:90px}
     </section>
     <aside class="detail" id="detail" aria-live="polite"></aside>
   </div>
+
+  <section class="overall" id="relSec" aria-label="ความสัมพันธ์ของน้ำตาลและไขมัน">
+    <h2>ความสัมพันธ์ของน้ำตาลและไขมัน</h2>
+    <div class="muted">คอเลสเตอรอล ไตรกลีเซอไรด์ HDL LDL น้ำตาลหลังอดอาหาร (FBS) และ HbA1c ดูร่วมกันจากผลตรวจของคุณ</div>
+    <div id="relBody"></div>
+  </section>
 
   <section aria-label="ภาพใบผลตรวจ">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
@@ -774,6 +797,117 @@ async function savePdf(){
   btn.disabled=false;
 }
 
+/* ---------- relationships: sugar & lipids ---------- */
+var RATIOS=[
+ {k:'nonhdl',t:'Non-HDL = คอเลสเตอรอลรวม − HDL',dp:0,good:130,warn:160,ref:'< 130 ดี · ≥ 160 สูง',d:'ไขมันทุกชนิดที่เกาะผนังหลอดเลือดได้ (LDL + VLDL) ใช้ประเมินความเสี่ยงหัวใจได้ดี โดยเฉพาะเมื่อไตรกลีเซอไรด์สูง'},
+ {k:'chdl',t:'คอเลสเตอรอลรวม ÷ HDL',dp:1,good:3.5,warn:5,ref:'< 3.5 ดี · ≥ 5 สูง',d:'สัดส่วนไขมันรวมต่อไขมันดี ยิ่งต่ำยิ่งดี'},
+ {k:'lhdl',t:'LDL ÷ HDL',dp:1,good:2.5,warn:3,ref:'< 2.5 ดี · ≥ 3 สูง',d:'สมดุลระหว่างไขมันที่พอกหลอดเลือดกับไขมันที่ช่วยขนออก'},
+ {k:'thdl',t:'ไตรกลีเซอไรด์ ÷ HDL',dp:1,good:2,warn:3,ref:'< 2 ดี · ≥ 3 สูง',d:'ถ้าสูง มักพบร่วมกับภาวะดื้ออินซูลิน และ LDL ชนิดเล็กหนาแน่นที่อันตรายกว่า'},
+ {k:'eag',t:'น้ำตาลเฉลี่ย (eAG) = 28.7 × HbA1c − 46.7',dp:0,good:117,warn:140,ref:'< 117 ปกติ (HbA1c < 5.7)',d:'แปลง HbA1c เป็นหน่วย mg/dL เพื่อเทียบกับ FBS ได้ตรง ๆ'}
+];
+var MEAN=[
+ {k:'chol',r:'คอเลสเตอรอลรวม ≈ LDL + HDL + VLDL (VLDL ประมาณ ไตรกลีเซอไรด์ ÷ 5) ค่ารวมสูงอาจมาจาก LDL สูง หรือจาก HDL สูงซึ่งเป็นเรื่องดี จึงต้องดูแยกส่วน'},
+ {k:'ldl',r:'ตัวหลักที่สะสมเป็นคราบในผนังหลอดเลือด เป็นเป้าหมายแรกของการลดความเสี่ยงหัวใจ ได้รับผลจากไขมันอิ่มตัว ไขมันทรานส์ และพันธุกรรม'},
+ {k:'hdl',r:'ขนคอเลสเตอรอลส่วนเกินกลับไปที่ตับ HDL ต่ำมักมาคู่กับไตรกลีเซอไรด์สูง น้ำหนักเกิน ขาดการออกกำลังกาย และภาวะดื้ออินซูลิน'},
+ {k:'tg',r:'ขึ้นตามน้ำตาล แป้ง และแอลกอฮอล์ที่กินเกิน ตับเปลี่ยนส่วนเกินเป็นไตรกลีเซอไรด์ จึงมักสูงพร้อมน้ำตาลในเลือด และทำให้ HDL ลดลง'},
+ {k:'fbs',r:'ภาพน้ำตาล ณ เช้าวันตรวจ ขึ้นลงได้ตามมื้อเย็นก่อนหน้า การนอน และความเครียด จึงควรดูคู่กับ HbA1c'},
+ {k:'hba1c',r:'ค่าเฉลี่ยน้ำตาลย้อนหลัง 2–3 เดือน ถ้า FBS ปกติแต่ HbA1c สูง แปลว่าน้ำตาลหลังอาหารอาจสูง ถ้าทั้งสองค่าสูง ยืนยันว่าน้ำตาลสูงต่อเนื่อง'}
+];
+function fx(n,dp){return n==null||!isFinite(n)?'-':Number(n).toFixed(dp)}
+function rStat(R,v){return v<R.good?'good':v<R.warn?'warn':'bad'}
+function rPill(s){return '<span class="pill '+s+'"><span aria-hidden="true">'+ST[s].i+'</span>'+(s==='good'?'ดี':s==='warn'?'ระวัง':'สูง')+'</span>'}
+function relRows(){
+  return sorted().filter(hasVals).map(function(r){var v=r.values,o={date:r.date,v:v};
+    if(v.chol!=null&&v.hdl)o.nonhdl=v.chol-v.hdl,o.chdl=v.chol/v.hdl;
+    if(v.ldl!=null&&v.hdl)o.lhdl=v.ldl/v.hdl;
+    if(v.tg!=null&&v.hdl)o.thdl=v.tg/v.hdl;
+    if(v.hba1c!=null)o.eag=28.7*v.hba1c-46.7;
+    return o}).filter(function(o){return ['chol','hdl','ldl','tg','fbs','hba1c'].some(function(k){return o.v[k]!=null})});
+}
+function sugarSVG(rows){
+  var pts=rows.filter(function(o){return o.v.fbs!=null||o.eag!=null});if(!pts.length)return '<div class="muted">ยังไม่มีค่า FBS หรือ HbA1c</div>';
+  var W=640,H=240,L=40,R=112,T=16,B=30,vals=[];
+  pts.forEach(function(o){if(o.v.fbs!=null)vals.push(o.v.fbs);if(o.eag!=null)vals.push(o.eag)});
+  var lo=Math.min(70,Math.min.apply(null,vals)-10),hi=Math.max(160,Math.max.apply(null,vals)+15);
+  var tt=pts.map(function(o){return +new Date(o.date+'T00:00:00')}),t0=Math.min.apply(null,tt),t1=Math.max.apply(null,tt);
+  var x=function(o){return pts.length===1?(L+W-R)/2:L+(+new Date(o.date+'T00:00:00')-t0)/(t1-t0)*(W-L-R)};
+  var y=function(v){return T+(hi-v)/(hi-lo)*(H-T-B)};
+  var s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="กราฟ FBS เทียบน้ำตาลเฉลี่ยจาก HbA1c">';
+  s+='<rect x="'+L+'" y="'+y(100)+'" width="'+(W-L-R)+'" height="'+(y(lo)-y(100))+'" fill="var(--band)"/>';
+  s+='<rect x="'+L+'" y="'+y(126)+'" width="'+(W-L-R)+'" height="'+(y(100)-y(126))+'" fill="var(--wband)"/>';
+  s+='<rect x="'+L+'" y="'+T+'" width="'+(W-L-R)+'" height="'+(y(126)-T)+'" fill="var(--bband)"/>';
+  [100,126].forEach(function(v){s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="var(--line)" stroke-dasharray="4 3"/><text class="ax" x="'+(L-6)+'" y="'+(y(v)+4)+'" text-anchor="end">'+v+'</text>'});
+  s+='<text class="ax" x="'+(W-R+8)+'" y="'+((y(100)+y(lo))/2+4)+'">ปกติ &lt; 100</text><text class="ax" x="'+(W-R+8)+'" y="'+((y(126)+y(100))/2+4)+'">ก่อนเบาหวาน</text><text class="ax" x="'+(W-R+8)+'" y="'+((y(126)+T)/2+4)+'">≥ 126</text>';
+  pts.forEach(function(o){s+='<text class="ax" x="'+x(o)+'" y="'+(H-8)+'" text-anchor="middle">'+dateTh(o.date,true)+'</text>'});
+  function series(get,col,dash,name,other){
+    var q=pts.filter(function(o){return get(o)!=null});if(!q.length)return;
+    if(q.length>1)s+='<path d="'+q.map(function(o,i){return (i?'L':'M')+x(o).toFixed(1)+' '+y(get(o)).toFixed(1)}).join('')+'" fill="none" stroke="'+col+'" stroke-width="2"'+(dash?' stroke-dasharray="6 4"':'')+' stroke-linejoin="round"/>';
+    q.forEach(function(o){var v=get(o),ov=other(o),below=ov!=null&&ov>v;s+='<circle cx="'+x(o)+'" cy="'+y(v)+'" r="5" fill="'+col+'" stroke="var(--surface)" stroke-width="2"><title>'+name+' '+dateTh(o.date)+': '+Math.round(v)+' mg/dL</title></circle><text class="ax" x="'+x(o)+'" y="'+(y(v)+(below?18:-10))+'" text-anchor="middle" style="fill:var(--ink);font-weight:600">'+Math.round(v)+'</text>'});
+  }
+  series(function(o){return o.v.fbs},'var(--c2)',false,'FBS',function(o){return o.eag});
+  series(function(o){return o.eag},'var(--accent)',true,'น้ำตาลเฉลี่ยจาก HbA1c',function(o){var f=o.v.fbs;return f==null?null:f+0.001});
+  s+='</svg>';
+  return '<div class="lgd"><span><i style="background:var(--c2)"></i>FBS (น้ำตาลเช้าวันตรวจ)</span><span><i style="background:var(--accent)"></i>น้ำตาลเฉลี่ย 3 เดือน (คำนวณจาก HbA1c)</span></div><div class="chart">'+s+'</div>';
+}
+function lipidBars(rows){
+  var rs=rows.filter(function(o){return o.v.chol!=null&&o.v.hdl!=null&&o.v.ldl!=null}).slice(-5);
+  if(!rs.length)return '<div class="muted">ต้องมีคอเลสเตอรอลรวม HDL และ LDL ในครั้งเดียวกัน</div>';
+  var mx=Math.max(240,Math.max.apply(null,rs.map(function(o){return o.v.chol})))*1.02;
+  return '<div class="lgd" style="margin-bottom:8px"><span><i class="sq" style="background:var(--accent)"></i>HDL</span><span><i class="sq" style="background:var(--c2)"></i>LDL</span><span><i class="sq" style="background:var(--c3)"></i>ส่วนที่เหลือ (VLDL)</span><span><i style="border-left:2px dashed var(--ink2);width:0;height:10px"></i>200 mg/dL</span></div>'+
+   rs.map(function(o){var v=o.v,rest=Math.max(0,v.chol-v.hdl-v.ldl);
+    function seg(n,c){return n>0?'<i style="width:'+(n/mx*100)+'%;background:'+c+'" title="'+n+'"></i>':''}
+    return '<div class="lbar"><div class="num"><b>'+dateTh(o.date)+'</b> · รวม <b>'+v.chol+'</b></div><div class="trk" role="img" aria-label="คอเลสเตอรอลรวม '+v.chol+' HDL '+v.hdl+' LDL '+v.ldl+'">'+seg(v.hdl,'var(--accent)')+seg(v.ldl,'var(--c2)')+seg(rest,'var(--c3)')+
+     '<span class="ref" style="left:'+(200/mx*100)+'%"></span></div><div class="grp num">HDL '+v.hdl+' · LDL '+v.ldl+' · ส่วนที่เหลือ '+fx(rest,0)+(v.tg!=null?' (ไตรกลีเซอไรด์ ÷ 5 ≈ '+fx(v.tg/5,0)+')':'')+'</div></div>'}).join('')+
+   '<div class="note">ห้องแล็บมักวัด LDL โดยตรง ผลรวมจึงอาจไม่ตรงกับคอเลสเตอรอลรวมพอดี</div>';
+}
+function metsBox(){
+  var lv=latestVals(),man=profile.sex==='ชาย',g=function(k){return lv[k]?lv[k].v:null};
+  var bp=g('sbp')!=null||g('dbp')!=null;
+  var it=[
+   {t:'ไตรกลีเซอไรด์ ≥ 150',v:g('tg'),hit:function(v){return v>=150}},
+   {t:'HDL < '+(man?40:50)+(profile.sex?'':' (เกณฑ์ผู้หญิง; ผู้ชาย < 40)'),v:g('hdl'),hit:function(v){return v<(man?40:50)}},
+   {t:'น้ำตาลหลังอดอาหาร ≥ 100',v:g('fbs'),hit:function(v){return v>=100}},
+   {t:'ความดัน ≥ 130/85',v:bp?((g('sbp')||'-')+'/'+(g('dbp')||'-')):null,hit:function(){return (g('sbp')||0)>=130||(g('dbp')||0)>=85}},
+   {t:'รอบเอว ≥ '+(man?90:80)+' ซม.',v:null}
+  ];
+  var hit=0,known=0;
+  var li=it.map(function(x){if(x.v==null)return '<li><b class="ic muted">?</b><span>'+x.t+' <span class="muted">ไม่มีข้อมูล</span></span></li>';
+    known++;var h=x.hit(x.v);if(h)hit++;
+    return '<li><b class="ic" style="color:var(--'+(h?'bad':'good')+')">'+(h?'✕':'✓')+'</b><span>'+x.t+' <span class="muted">(ของคุณ '+x.v+')</span> '+(h?'<b>เข้าเกณฑ์</b>':'ไม่เข้าเกณฑ์')+'</span></li>'}).join('');
+  return '<div class="box"><h4>กลุ่มอาการเมตาบอลิก (ตรวจคัดกรอง)</h4><div class="note" style="margin-bottom:6px">มีตั้งแต่ 3 ใน 5 ข้อขึ้นไป ถือว่าเข้าข่าย และเสี่ยงเบาหวานกับโรคหัวใจมากขึ้น</div><ul class="chk">'+li+'</ul><div style="margin-top:8px">เข้าเกณฑ์ <b>'+hit+'</b> จาก '+known+' ข้อที่มีข้อมูล'+(known<5?' · ใส่ค่าความดันและวัดรอบเอวที่ระดับสะดือเพื่อประเมินให้ครบ':'')+'</div></div>';
+}
+function relInsights(rows){
+  var out=[],last=rows[rows.length-1],withS=rows.filter(function(o){return o.v.fbs!=null&&o.eag!=null}),ls=withS[withS.length-1];
+  if(ls){var d=ls.v.fbs-ls.eag;out.push('ล่าสุด ('+dateTh(ls.date)+') FBS '+ls.v.fbs+' เทียบน้ำตาลเฉลี่ยจาก HbA1c '+ls.v.hba1c+'% ≈ '+fx(ls.eag,0)+' mg/dL '+(Math.abs(d)<=15?'สองค่าใกล้กัน แปลว่าน้ำตาลสูงในระดับนี้ค่อนข้างต่อเนื่อง ไม่ใช่แค่วันตรวจ':d<0?'FBS ต่ำกว่าค่าเฉลี่ย แปลว่าน้ำตาลช่วงหลังอาหารอาจสูงกว่าตอนเช้า':'FBS สูงกว่าค่าเฉลี่ย อาจเป็นผลจากมื้อก่อนหน้าหรือการนอน ควรดูค่าครั้งต่อไปประกอบ'))}
+  var wt=rows.filter(function(o){return o.thdl!=null}),lt=wt[wt.length-1];
+  if(lt)out.push('ไตรกลีเซอไรด์ ÷ HDL ล่าสุด '+fx(lt.thdl,1)+(lt.thdl<2?' อยู่ในเกณฑ์ดี ด้านไขมันยังไม่ชี้ไปทางภาวะดื้ออินซูลินชัดเจน':lt.thdl<3?' อยู่ในช่วงควรระวัง':' สูง สัมพันธ์กับภาวะดื้ออินซูลินและ LDL ชนิดเล็กหนาแน่น'));
+  var wl=rows.filter(function(o){return o.v.chol!=null&&o.v.ldl!=null});
+  if(wl.length>=2){var a=wl[wl.length-2],b=wl[wl.length-1],dc=b.v.chol-a.v.chol,dl=b.v.ldl-a.v.ldl;
+    if(Math.abs(dc)>=5)out.push('คอเลสเตอรอลรวม'+(dc>0?'เพิ่ม':'ลด')+' '+Math.abs(dc)+' จากครั้งก่อน โดย LDL '+(dl>=0?'เพิ่ม ':'ลด ')+Math.abs(dl)+(dc>0&&dl>0&&dl>=dc*0.6?' ส่วนที่เพิ่มขึ้นจึงมาจากไขมันไม่ดีเป็นหลัก':''))}
+  var wn=rows.filter(function(o){return o.nonhdl!=null}),ln=wn[wn.length-1];
+  if(ln)out.push('Non-HDL ล่าสุด '+fx(ln.nonhdl,0)+' mg/dL '+(ln.nonhdl<130?'อยู่ในเกณฑ์ดี':ln.nonhdl<160?'สูงกว่าเกณฑ์ดีเล็กน้อย':'สูง (เป้าหมายทั่วไปต่ำกว่า 160 และต่ำกว่า 130 ถ้ามีเบาหวานหรือความเสี่ยงสูง)'));
+  return out.length?'<div class="box"><h4>สิ่งที่เห็นจากผลของคุณ</h4><ul>'+out.map(function(x){return '<li>'+x+'</li>'}).join('')+'</ul></div>':'';
+}
+function renderRel(){
+  var rows=relRows(),el=$('relBody');
+  if(!rows.length){el.innerHTML='<div class="box">ยังไม่มีค่าน้ำตาลหรือไขมันให้วิเคราะห์</div>';return}
+  var last=rows.slice(-4);
+  var tbl='<div class="tbl reltbl"><table><thead><tr><th>ตัวชี้วัดที่คำนวณจากผลตรวจ</th>'+last.map(function(o){return '<th>'+dateTh(o.date)+'</th>'}).join('')+'<th>เกณฑ์</th></tr></thead><tbody>'+
+    RATIOS.map(function(R){return '<tr><td><b>'+esc(R.t)+'</b><div class="grp">'+esc(R.d)+'</div></td>'+last.map(function(o){var v=o[R.k];return '<td class="num">'+(v==null?'<span class="muted">-</span>':'<b>'+fx(v,R.dp)+'</b><br>'+rPill(rStat(R,v)))+'</td>'}).join('')+'<td class="grp">'+R.ref+'</td></tr>'}).join('')+'</tbody></table></div>';
+  var flow='<div class="box"><h4>ค่าเหล่านี้เชื่อมกันอย่างไร</h4><ul>'+
+    '<li><b>น้ำตาลสองแบบ:</b> FBS คือภาพเช้าวันตรวจ HbA1c คือค่าเฉลี่ย 2–3 เดือน แปลง HbA1c เป็น mg/dL ได้ด้วยสูตร 28.7 × HbA1c − 46.7 เพื่อเทียบกับ FBS</li>'+
+    '<li><b>ไขมันรวมแยกได้เป็นส่วน:</b> คอเลสเตอรอลรวม ≈ LDL + HDL + ไตรกลีเซอไรด์ ÷ 5 ค่ารวมเท่ากันอาจมีความหมายต่างกัน ขึ้นกับว่ามาจาก LDL หรือ HDL</li>'+
+    '<li><b>น้ำตาลกับไขมันส่งผลถึงกัน:</b> เมื่อร่างกายดื้ออินซูลิน ตับสร้างไตรกลีเซอไรด์มากขึ้น HDL ลดลง และ LDL เปลี่ยนเป็นชนิดเล็กหนาแน่น น้ำตาลสูงจึงมักมาพร้อมไตรกลีเซอไรด์สูงและ HDL ต่ำ</li>'+
+    '<li><b>ผลรวมต่อหลอดเลือด:</b> LDL สูงร่วมกับน้ำตาลสูงเพิ่มความเสี่ยงหลอดเลือดหัวใจและสมองมากกว่าค่าใดค่าหนึ่งสูงเดี่ยว ๆ คนที่มีเบาหวานจึงมักมีเป้าหมาย LDL ต่ำกว่าคนทั่วไป</li></ul></div>';
+  var lv=latestVals();
+  var cards='<div class="mcards">'+MEAN.map(function(x){var m=MK[x.k],p=lv[x.k];return '<div class="box"><h4><span>'+esc(m.t)+'</span>'+(p?'<span class="num">'+fmt(m,p.v)+' '+pill(m,p.v)+'</span>':'')+'</h4><div class="grp" style="margin-bottom:4px">ปกติ '+refText(m)+' '+esc(m.u)+'</div><div>'+esc(m.d)+'</div><div style="margin-top:6px"><b>ความสัมพันธ์:</b> '+esc(x.r)+'</div></div>'}).join('')+'</div>';
+  el.innerHTML=relInsights(rows)+
+    '<div class="relgrid"><div><h3 style="font-size:15px;margin-bottom:6px">น้ำตาล: FBS เทียบค่าเฉลี่ยจาก HbA1c</h3>'+sugarSVG(rows)+'</div>'+
+    '<div><h3 style="font-size:15px;margin-bottom:6px">ไขมัน: คอเลสเตอรอลรวมประกอบด้วยอะไร</h3>'+lipidBars(rows)+'</div></div>'+
+    tbl+'<div class="relgrid">'+flow+metsBox()+'</div>'+
+    '<h3 style="font-size:15px">ความหมายของแต่ละค่า</h3>'+cards;
+}
+
 /* ---------- gallery ---------- */
 var confirmImg=null;
 function renderGallery(){
@@ -806,7 +940,7 @@ function refresh(){
   if(!series(selected).length){var k=M.filter(function(m){return series(m.k).length})[0];selected=k?k.k:'fbs'}
   var pend=recs.filter(function(r){return !r.demo&&!hasVals(r)}).length;
   $('pendBar').hidden=!pend;$('pendTxt').innerHTML='<b>มี '+pend+' รายการที่มีแต่ภาพ ยังไม่มีค่า</b> กด "+ เพิ่มใบตรวจ" แล้วเลือกภาพเดิมอีกครั้งเพื่ออ่านค่า หรือบอก Claude ในแชทให้อ่านให้';
-  renderSummary();renderFilters();renderCards();renderDetail();renderHist();renderGallery();
+  renderSummary();renderFilters();renderCards();renderDetail();renderHist();renderGallery();renderRel();
 }
 function select(k){selected=k;renderCards();renderDetail();if(window.innerWidth<=900)$('detail').scrollIntoView({behavior:'smooth',block:'start'})}
 document.addEventListener('click',function(e){
@@ -835,7 +969,9 @@ var dz=$('drop');
 ['dragleave','drop'].forEach(function(n){dz.addEventListener(n,function(e){e.preventDefault();dz.classList.remove('over')})});
 dz.addEventListener('drop',function(e){if(e.dataTransfer&&e.dataTransfer.files.length)readFiles(Array.prototype.slice.call(e.dataTransfer.files).filter(function(f){return /^image\//.test(f.type)}))});
 $('age').value=profile.age;$('sex').value=profile.sex;
-function saveProfile(){profile.age=$('age').value;profile.sex=$('sex').value;try{localStorage.setItem('hd_profile',JSON.stringify(profile))}catch(e){}}
+function applySex(){var f=profile.sex==='หญิง';MK.hdl.nr=[f?50:40,null];MK.hdl.wr=[f?40:30,null];MK.hdl.d='ช่วยพาไขมันออกจากผนังหลอดเลือด ยิ่งสูงยิ่งดี เกณฑ์ผู้หญิงมากกว่า 50 ผู้ชายมากกว่า 40 mg/dL'+(profile.sex?'':' (ระบุเพศในส่วนวิเคราะห์ภาพรวมเพื่อใช้เกณฑ์ที่ตรงกับคุณ)')}
+applySex();
+function saveProfile(){profile.age=$('age').value;profile.sex=$('sex').value;try{localStorage.setItem('hd_profile',JSON.stringify(profile))}catch(e){}applySex();refresh()}
 $('age').onchange=saveProfile;$('sex').onchange=saveProfile;
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){$('addOv').hidden=true;$('lb').hidden=true}});
 
