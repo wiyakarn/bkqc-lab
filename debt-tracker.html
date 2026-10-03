@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ตารางบันทึกหนี้</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1c2430;--mute:#6b7685;--line:#e3e7ec;--pri:#2457d6;--ok:#14854f;--warn:#b86e00;--bad:#c62f2f;--chip:#eef2fb}
+@media (prefers-color-scheme:dark){:root{--bg:#12161c;--card:#1b212a;--ink:#e8ecf2;--mute:#97a3b3;--line:#2b3440;--pri:#6c93f5;--ok:#43c283;--warn:#f0a63a;--bad:#ff7070;--chip:#232c3b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,"Noto Sans Thai","Sarabun",sans-serif}
+header{padding:20px 16px 8px;max-width:1100px;margin:0 auto}
+h1{margin:0;font-size:22px}
+header p{margin:4px 0 0;color:var(--mute)}
+main{max-width:1100px;margin:0 auto;padding:8px 16px 48px;display:grid;gap:16px}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+h2{margin:0 0 12px;font-size:17px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--chip);border-radius:10px;padding:10px 12px}
+.kpi b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.kpi span{color:var(--mute);font-size:12.5px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:6px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{font-size:12.5px;color:var(--mute);font-weight:600;white-space:nowrap}
+td.n,th.n{text-align:right}
+.scroll{overflow-x:auto}
+input,select,textarea{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:6px 8px;min-width:0;max-width:100%}
+td input,td select{width:100%}
+td input.n{text-align:right}
+input:focus,select:focus{outline:2px solid var(--pri);outline-offset:-1px}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 12px;border-radius:8px}
+button.pri{background:var(--pri);border-color:var(--pri);color:#fff}
+button.x{padding:3px 8px;color:var(--bad)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+.row label{display:flex;flex-direction:column;font-size:12.5px;color:var(--mute);gap:2px}
+.row label input,.row label select{color:var(--ink);font-size:15px}
+.tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;background:var(--chip)}
+.good{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.advice{display:grid;gap:8px}
+.advice div{border-left:4px solid var(--pri);background:var(--chip);padding:8px 12px;border-radius:0 8px 8px 0}
+.advice .w{border-color:var(--warn)}.advice .b{border-color:var(--bad)}.advice .g{border-color:var(--ok)}
+.advice small{display:block;color:var(--mute)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.cols{grid-template-columns:1fr}}
+svg{width:100%;height:auto;display:block}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--mute);margin-top:6px}
+.legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px;border-radius:2px}
+.muted{color:var(--mute)}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden}.bar>div{height:100%;background:var(--ok)}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:.25s;max-width:90vw}
+#toast.on{opacity:1}
+details summary{cursor:pointer;color:var(--mute)}
+</style>
+</head>
+<body>
+<header>
+  <h1>ตารางบันทึกหนี้</h1>
+  <p><span id="sync" class="muted">กำลังเชื่อมต่อการซิงค์…</span><br>กรอกเองได้ · คำนวณดอกเบี้ย/ยอดคงเหลืออัตโนมัติ · วิเคราะห์แนวโน้ม · แนะนำวิธีปิดหนี้ให้เร็วขึ้นทุกครั้งที่บันทึก (ข้อมูลเก็บในเครื่อง และซิงค์ข้ามอุปกรณ์เมื่อเปิดผ่านลิงก์ claude.ai ด้วยบัญชีเดียวกัน)</p>
+</header>
+<main>
+
+<section>
+  <h2>ภาพรวม</h2>
+  <div class="kpis" id="kpis"></div>
+</section>
+
+<section id="adviceBox">
+  <h2>คำแนะนำล่าสุด <span class="muted" id="adviceWhen" style="font-weight:400;font-size:13px"></span></h2>
+  <div class="advice" id="advice"></div>
+</section>
+
+<section>
+  <h2>0) รายรับ–รายจ่ายประจำ (ต่อเดือน)</h2>
+  <div class="scroll"><table id="cashTable">
+    <thead><tr><th>รายการ</th><th>ประเภท</th><th class="n">จำนวน (฿)</th><th>ความถี่</th><th class="n">เฉลี่ย/เดือน</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <div class="row" style="margin-top:10px">
+    <button class="pri" id="addCash">+ เพิ่มรายรับ/รายจ่าย</button>
+    <label>เงินสดสำรองที่มีตอนนี้ (฿)<input type="number" id="cashOnHand" min="0" step="any" style="width:170px"></label>
+    <span class="muted">ไม่ต้องใส่ค่างวดหนี้ในรายจ่าย — ระบบคิดจากรายการหนี้ให้</span>
+  </div>
+  <h2 style="margin-top:18px">แผนใช้ชีวิตจากรายรับ–รายจ่าย</h2>
+  <div id="lifePlan"></div>
+</section>
+
+<section>
+  <h2>1) รายการหนี้</h2>
+  <div class="scroll"><table id="debtTable">
+    <thead><tr><th>ชื่อหนี้</th><th>ประเภท</th><th class="n">ยอดตั้งต้น (฿)</th><th>วันที่เริ่มนับ</th><th class="n">ดอกเบี้ย %/ปี</th><th class="n">ขั้นต่ำ/เดือน (฿)</th><th class="n">ยอดคงเหลือตอนนี้</th><th class="n">ปิดแล้ว</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <div class="row" style="margin-top:10px">
+    <button class="pri" id="addDebt">+ เพิ่มหนี้</button>
+    <button id="sample">โหลดข้อมูลตัวอย่าง</button>
+    <span class="muted">แก้ช่องไหนก็ได้ ตัวเลขทุกอย่างคำนวณใหม่ทันที</span>
+  </div>
+</section>
+
+<section>
+  <h2>2) บันทึกการจ่าย / กู้เพิ่ม</h2>
+  <form id="logForm" class="row">
+    <label>วันที่<input type="date" id="lDate" required></label>
+    <label>หนี้<select id="lDebt" required></select></label>
+    <label>จ่ายแล้ว (฿)<input type="number" id="lPay" min="0" step="any" value="0" style="width:130px"></label>
+    <label>กู้/รูดเพิ่ม (฿)<input type="number" id="lBorrow" min="0" step="any" value="0" style="width:130px"></label>
+    <label>หมายเหตุ<input type="text" id="lNote" style="width:170px"></label>
+    <button class="pri" type="submit">บันทึก + วิเคราะห์</button>
+  </form>
+  <p class="muted" style="margin:8px 0">ระบบคิดดอกเบี้ยแบบรายวัน (ยอดคงเหลือ × อัตรา%/ปี × จำนวนวัน ÷ 365) นับจากรายการก่อนหน้าของหนี้นั้น แล้วหักยอดจ่าย → ได้ยอดคงเหลือใหม่</p>
+  <div class="scroll"><table id="logTable">
+    <thead><tr><th>วันที่</th><th>หนี้</th><th class="n">ยอดก่อนหน้า</th><th class="n">ดอกเบี้ย</th><th class="n">กู้เพิ่ม</th><th class="n">จ่าย</th><th class="n">ตัดต้น</th><th class="n">คงเหลือ</th><th>หมายเหตุ</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>3) แผนปิดหนี้</h2>
+  <div class="row">
+    <label>งบจ่ายหนี้ต่อเดือนรวม (฿)<input type="number" id="budget" min="0" step="any" style="width:180px"></label>
+    <label>วิธี<select id="strategy"><option value="avalanche">Avalanche (ดอกเบี้ยสูงก่อน – ประหยัดสุด)</option><option value="snowball">Snowball (ยอดน้อยก่อน – กำลังใจดี)</option></select></label>
+    <span class="muted" id="budgetHint"></span>
+  </div>
+  <div class="cols" style="margin-top:14px">
+    <div class="scroll"><table id="cmp">
+      <thead><tr><th>สถานการณ์</th><th class="n">ใช้เวลา</th><th class="n">ดอกเบี้ยรวม</th><th>หมดหนี้</th></tr></thead><tbody></tbody>
+    </table></div>
+    <div class="scroll"><table id="order">
+      <thead><tr><th>ลำดับโจมตี</th><th>หนี้</th><th>คาดว่าหมดเมื่อ</th></tr></thead><tbody></tbody>
+    </table></div>
+  </div>
+</section>
+
+<section>
+  <h2>4) แนวโน้ม</h2>
+  <svg id="chart" viewBox="0 0 800 300" role="img" aria-label="กราฟแนวโน้มหนี้รวม"></svg>
+  <div class="legend" id="legend"></div>
+  <div id="trendText" style="margin-top:8px"></div>
+</section>
+
+<section>
+  <h2>ข้อมูล</h2>
+  <div class="row">
+    <button id="exp">ส่งออก JSON</button>
+    <button id="expCsv">ส่งออก CSV (บันทึก)</button>
+    <label style="flex-direction:row;align-items:center;gap:6px"><span>นำเข้า JSON</span><input type="file" id="imp" accept="application/json"></label>
+    <button id="reset" class="x">ล้างทั้งหมด</button>
+  </div>
+</section>
+</main>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const KEY='debt-tracker-v1';
+const TYPES=['บัตรเครดิต','สินเชื่อส่วนบุคคล','ผ่อนสินค้า','รถยนต์','บ้าน','กยศ./การศึกษา','หนี้นอกระบบ','ยืมคนรู้จัก','อื่นๆ'];
+const $=s=>document.querySelector(s);
+const uid=()=>Math.random().toString(36).slice(2,9);
+const todayStr=()=>new Date().toISOString().slice(0,10);
+const fmt=n=>(Math.round(n*100)/100).toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2});
+const money=n=>'฿'+fmt(n);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dfmt=s=>s?new Date(s+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}):'-';
+const mfmt=d=>d.toLocaleDateString('th-TH',{month:'short',year:'2-digit'});
+const num=v=>{const x=parseFloat(v);return isFinite(x)&&x>=0?x:0};
+
+let S=load();S.cash=S.cash||[];S.cashOnHand=S.cashOnHand||0;
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.debts))return s}catch(e){}return{debts:[],logs:[],cash:[],cashOnHand:0,budget:0,strategy:'avalanche',lastAdvice:null}}
+function save(){S._ts=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}pushCloud()}
+
+/* ---------- Cloud sync (claude.ai db, private per account) ---------- */
+let cloudRef=null,pushTimer=null,lastPushed=0;
+function setSync(t,c){const el=$('#sync');el.textContent=t;el.className=c||'muted'}
+function pushCloud(){
+  if(!cloudRef)return;
+  setSync('กำลังซิงค์…','muted');
+  clearTimeout(pushTimer);
+  pushTimer=setTimeout(()=>{
+    const ts=S._ts||0;
+    cloudRef.set({json:JSON.stringify(S),ts}).then(()=>{lastPushed=ts;setSync('☁ ซิงค์แล้ว','good')},e=>setSync(e&&e.code==='quota_exceeded'?'⚠ ข้อมูลเยอะเกินที่ซิงค์ได้':'⚠ ซิงค์ไม่สำเร็จ (บันทึกในเครื่องแล้ว)','warn'));
+  },600);
+}
+function adoptRemote(doc){
+  try{
+    const r=JSON.parse(doc.json);if(!r||!Array.isArray(r.debts))return;
+    S={budget:0,strategy:'avalanche',lastAdvice:null,cash:[],cashOnHand:0,logs:[],...r,_ts:doc.ts};
+    try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
+    render();setSync('☁ ซิงค์แล้ว (อัปเดตจากอุปกรณ์อื่น)','good');
+  }catch(e){}
+}
+(async()=>{
+  try{
+    const [user,db]=await Promise.all([claude.use('user'),claude.use('db')]);
+    if(!user||!db){setSync('บันทึกในเครื่องนี้เท่านั้น — เปิดลิงก์ในแอป claude.ai ที่ล็อกอินเพื่อซิงค์หลายอุปกรณ์','muted');return}
+    const uid=await user.id();
+    if(!uid){setSync('บันทึกในเครื่องนี้เท่านั้น (ยังไม่ได้ล็อกอิน)','muted');return}
+    const ref=db.collection('data/users/'+uid).doc('debt-state');
+    let first=true;
+    ref.onSnapshot(snap=>{
+      const d=snap.exists?snap.data():null;
+      const local=S._ts||0,has=S.debts.length||S.logs.length||S.cash.length;
+      if(first){
+        first=false;cloudRef=ref;
+        if(d&&(d.ts||0)>local)return adoptRemote(d);
+        if(has&&(!d||local>(d.ts||0))){lastPushed=0;return pushCloud()}
+        setSync('☁ ซิงค์แล้ว','good');return;
+      }
+      if(d&&(d.ts||0)>(S._ts||0)&&d.ts!==lastPushed)adoptRemote(d);
+    },()=>setSync('⚠ ซิงค์ไม่สำเร็จ (บันทึกในเครื่องแล้ว)','warn'));
+  }catch(e){setSync('บันทึกในเครื่องนี้เท่านั้น','muted')}
+})();
+
+/* ---------- Core calc ---------- */
+const dayDiff=(a,b)=>Math.max(0,Math.round((new Date(b)-new Date(a))/864e5));
+
+// Recompute every log chronologically per debt. Returns {rows, cur:{debtId:balance}}
+function compute(){
+  const cur={},rows=[];
+  for(const d of S.debts){
+    let bal=num(d.balance),last=d.start||todayStr();
+    const ls=S.logs.filter(l=>l.debtId===d.id).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
+    for(const l of ls){
+      const prev=bal,days=dayDiff(last,l.date);
+      const interest=prev*num(d.apr)/100*days/365;
+      const owed=prev+interest+num(l.borrow);
+      const paid=Math.min(num(l.pay),owed);
+      bal=owed-paid;last=l.date>last?l.date:last;
+      const principal=Math.max(0,paid-interest);
+      rows.push({...l,prev,interest,borrow:num(l.borrow),pay:num(l.pay),principal,after:bal,debt:d,days});
+    }
+    cur[d.id]=bal;
+  }
+  rows.sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
+  return{rows,cur};
+}
+
+// Monthly simulation. mode: 'min' | 'avalanche' | 'snowball'
+function simulate(balances,budget,mode,extraBoost=0){
+  let ds=S.debts.map(d=>({id:d.id,name:d.name,bal:balances[d.id]||0,r:num(d.apr)/1200,min:num(d.min)})).filter(d=>d.bal>0.005);
+  const series=[ds.reduce((s,d)=>s+d.bal,0)],payoff={};
+  if(!ds.length)return{months:0,interest:0,series,payoff,ok:true};
+  const minSum=ds.reduce((s,d)=>s+d.min,0);
+  const total=mode==='min'?minSum:Math.max(budget,minSum)+extraBoost;
+  let interest=0,m=0;
+  while(ds.some(d=>d.bal>0.005)&&m<600){
+    m++;
+    for(const d of ds)if(d.bal>0){const i=d.bal*d.r;d.bal+=i;interest+=i}
+    let pool=total;
+    for(const d of ds)if(d.bal>0){const p=Math.min(d.min,d.bal,pool);d.bal-=p;pool-=p}
+    if(mode!=='min'){
+      const ord=ds.filter(d=>d.bal>0.005).sort(mode==='snowball'?(a,b)=>a.bal-b.bal:(a,b)=>b.r-a.r||a.bal-b.bal);
+      for(const d of ord){if(pool<=0)break;const p=Math.min(d.bal,pool);d.bal-=p;pool-=p}
+    }
+    for(const d of ds)if(d.bal<=0.005&&payoff[d.id]==null){d.bal=0;payoff[d.id]=m}
+    series.push(ds.reduce((s,d)=>s+d.bal,0));
+  }
+  const ok=!ds.some(d=>d.bal>0.005);
+  return{months:m,interest,series,payoff,ok};
+}
+const addMonths=(n)=>{const d=new Date();d.setMonth(d.getMonth()+n);return d};
+const dur=m=>m>=600?'ไม่มีวันหมด':(m>=12?Math.floor(m/12)+' ปี ':'')+(m%12?m%12+' เดือน':(m>=12?'':'0 เดือน'));
+
+/* ---------- Cash flow / life plan ---------- */
+const KINDS={income:'รายรับ',need:'รายจ่ายจำเป็น',want:'รายจ่ายตามใจ/ไลฟ์สไตล์',save:'ออม/ลงทุน'};
+const FREQ={month:'ต่อเดือน',week:'ต่อสัปดาห์',year:'ต่อปี'};
+const mAmt=i=>num(i.amount)*({month:1,week:52/12,year:1/12}[i.freq]||1);
+function cashflow(){const sum=k=>S.cash.filter(i=>i.kind===k).reduce((s,i)=>s+mAmt(i),0);return{income:sum('income'),need:sum('need'),want:sum('want'),save:sum('save')}}
+function lifePlan(cur){
+  const cf=cashflow();if(!cf.income)return null;
+  const active=S.debts.filter(d=>(cur[d.id]||0)>0.005);
+  const minSum=active.reduce((s,d)=>s+num(d.min),0);
+  const hand=num(S.cashOnHand);
+  const short=hand<cf.need;
+  const saveRec=short?Math.max(cf.save,cf.income*0.05):cf.save;
+  const wantRec=Math.min(cf.want,cf.income*0.2);
+  const budNow=Math.max(0,cf.income-cf.need-cf.want-cf.save);
+  const budRec=Math.max(0,cf.income-cf.need-wantRec-saveRec);
+  const hasDebt=active.length>0;
+  const simNow=hasDebt?simulate(cur,budNow,S.strategy):null,simRec=hasDebt?simulate(cur,budRec,S.strategy):null;
+  const tips=[];
+  const pct=v=>(v/cf.income*100).toFixed(0)+'%';
+  if(cf.income<cf.need+minSum)tips.push({k:'b',t:`รายรับ ${money(cf.income)} ไม่พอจ่ายรายจ่ายจำเป็น + ขั้นต่ำหนี้ (${money(cf.need+minSum)}) ขาด ${money(cf.need+minSum-cf.income)}/เดือน`,s:'ทำพร้อมกัน: หารายได้เสริม, ลดค่าใช้จ่ายจำเป็นที่ต่อรองได้ (ค่าเช่า/ประกัน/โทรศัพท์/อินเทอร์เน็ต), และเจรจาเจ้าหนี้ขอลดค่างวดหรือขยายเวลา ก่อนจะผิดนัดชำระ'});
+  if(hasDebt){const dti=minSum/cf.income*100;if(dti>=40)tips.push({k:'b',t:`ค่างวดขั้นต่ำคิดเป็น ${dti.toFixed(0)}% ของรายได้ (เกณฑ์ปลอดภัย ≤ 30–40%)`,s:'ภาระหนักมาก ควรปรับโครงสร้างหนี้/รวมหนี้ให้ดอกต่ำลง และห้ามก่อหนี้ใหม่'});else if(dti>=30)tips.push({k:'w',t:`ค่างวดขั้นต่ำคิดเป็น ${dti.toFixed(0)}% ของรายได้`,s:'เริ่มตึง ระวังเหตุฉุกเฉิน ควรเร่งปิดก้อนที่ดอกสูงและงดก่อหนี้ใหม่'})}
+  if(cf.need/cf.income>0.5)tips.push({k:'w',t:`รายจ่ายจำเป็น ${pct(cf.need)} ของรายได้ (เกณฑ์ ≤ 50%)`,s:'ลองทบทวนหมวดใหญ่ที่สุดก่อน: ที่อยู่ ค่าเดินทาง อาหาร ประกัน แล้วต่อรองหรือเปลี่ยนแพ็กเกจ'});
+  if(cf.want>wantRec+1)tips.push({k:'w',t:`รายจ่ายตามใจ ${money(cf.want)} (${pct(cf.want)} ของรายได้) — ลดลงเหลือ ${money(wantRec)} (20%) ชั่วคราวจนกว่าจะปิดหนี้`,s:`ลดได้ ${money(cf.want-wantRec)}/เดือน เอาไปโปะหนี้ทั้งหมด จะเร็วขึ้น${simNow&&simRec&&simNow.ok&&simRec.ok&&simNow.months>simRec.months?' '+(simNow.months-simRec.months)+' เดือน':''}`});
+  const ent=wantRec;
+  tips.push({k:'g',t:`ใช้ชีวิตตามแผน: งบตามใจ ${money(ent)}/เดือน ≈ ${money(Math.round(ent/(52/12)))}/สัปดาห์ ≈ ${money(Math.round(ent/30))}/วัน`,s:'แยกบัญชี/เงินสดไว้ใช้ส่วนนี้โดยเฉพาะ หมดแล้วหยุด ห้ามรูดบัตรหรือกู้เพิ่ม'});
+  if(hasDebt)tips.push({k:'',t:`วันเงินเดือนออก: โอนจ่ายหนี้ ${money(budRec)} ก่อนทันที แล้วค่อยใช้ส่วนที่เหลือ`,s:'ตั้งโอนอัตโนมัติวันเดียวกับรายได้เข้า จะได้ไม่ใช้เงินส่วนนี้ก่อน'});
+  if(cf.need>0){const mo=hand/cf.need;
+    if(mo<1)tips.push({k:'w',t:`เงินสำรองครอบคลุมรายจ่ายจำเป็นได้ ${mo.toFixed(1)} เดือน`,s:`ตั้งเป้ากองทุนฉุกเฉินเริ่มต้น ${money(cf.need)} (1 เดือน) ก่อน เพื่อไม่ต้องกู้เมื่อมีเหตุไม่คาดฝัน — แผนแนะนำจึงกันเงินออม ${money(saveRec)}/เดือน`});
+    else if(hasDebt)tips.push({k:'g',t:`เงินสำรองครอบคลุม ${mo.toFixed(1)} เดือน — พอสำหรับช่วงผ่อนหนี้`,s:'ใช้เงินส่วนเกินโปะหนี้ดอกสูงได้เต็มที่ และเมื่อหมดหนี้ให้สะสมให้ถึง 3–6 เดือน'});
+    else tips.push({k:'g',t:`เงินสำรองครอบคลุม ${mo.toFixed(1)} เดือน`,s:mo<3?'สะสมให้ถึง 3–6 เดือน แล้วเริ่มลงทุนระยะยาว':'ถึงเป้าแล้ว ต่อไปออม/ลงทุนระยะยาวและกองทุนเกษียณ'});}
+  return{cf,minSum,budNow,budRec,saveRec,wantRec,simNow,simRec,tips,hasDebt};
+}
+function cashAdvice(cur){
+  const p=lifePlan(cur);if(!p)return[];
+  const o=[];
+  const worst=p.tips.find(t=>t.k==='b');
+  if(worst)o.push(worst);
+  if(p.hasDebt&&p.budRec>p.budNow+1)o.push({k:'g',t:`รายรับ–รายจ่าย: ตัดรายจ่ายตามใจเหลือ 20% ได้งบจ่ายหนี้ ${money(p.budRec)}/เดือน (ตอนนี้ ${money(p.budNow)})`,s:'กด "ใช้งบนี้" ในส่วนแผนใช้ชีวิตเพื่อตั้งงบจ่ายหนี้'});
+  else if(p.hasDebt)o.push({k:'',t:`รายรับ–รายจ่าย: เหลือจ่ายหนี้ได้ ${money(p.budNow)}/เดือน`});
+  return o;
+}
+
+/* ---------- Analysis / advice ---------- */
+function analyse(ctx){ // ctx: {rows,cur, lastLog?}
+  const out=[];const {cur}=ctx;
+  const active=S.debts.filter(d=>(cur[d.id]||0)>0.005);
+  const total=active.reduce((s,d)=>s+cur[d.id],0);
+  const minSum=active.reduce((s,d)=>s+num(d.min),0);
+  const budget=num(S.budget);
+  if(!S.debts.length){return[{k:'',t:'เริ่มจากเพิ่มรายการหนี้ในข้อ 1 (หรือกด "โหลดข้อมูลตัวอย่าง") แล้วบันทึกการจ่ายในข้อ 2'}]}
+  if(!active.length){return[{k:'g',t:'🎉 ไม่มีหนี้คงเหลือแล้ว',s:'ตั้งเงินสำรองฉุกเฉิน 3–6 เดือน และเริ่มออม/ลงทุนด้วยเงินก้อนที่เคยจ่ายหนี้'}]}
+
+  const l=ctx.lastLog;
+  if(l){
+    const d=l.debt;
+    if(l.borrow>0)out.push({k:'b',t:`คุณกู้/รูดเพิ่ม ${money(l.borrow)} ใน "${d.name}" ทำให้หนี้เพิ่มขึ้น`,s:'หยุดก่อหนี้ใหม่ระหว่างที่ผ่อนอยู่ ถ้าจำเป็นให้ใช้เงินสดหรือเงินสำรองแทน'});
+    if(l.pay>0&&l.pay<num(d.min))out.push({k:'b',t:`จ่าย ${money(l.pay)} ต่ำกว่าขั้นต่ำ ${money(d.min)} ของ "${d.name}"`,s:'อาจโดนค่าปรับ/ติดเครดิตบูโร ควรจ่ายอย่างน้อยขั้นต่ำให้ครบทุกรอบ'});
+    if(l.pay>0&&l.interest>0){
+      const share=Math.min(100,l.interest/l.pay*100);
+      if(share>=50)out.push({k:'w',t:`การจ่ายครั้งนี้ ${share.toFixed(0)}% เป็นดอกเบี้ย (${money(l.interest)}) ตัดต้นได้เพียง ${money(l.principal)}`,s:'ดอกเบี้ยกินเงินที่จ่ายเกินครึ่ง ยิ่งจ่ายเกินขั้นต่ำเร็วเท่าไร ดอกเบี้ยรอบถัดไปยิ่งลด'});
+      else out.push({k:'g',t:`จ่ายครั้งนี้ตัดเงินต้น ${money(l.principal)} (${(100-share).toFixed(0)}% ของยอดจ่าย)`,s:`ยอดคงเหลือ "${d.name}" เหลือ ${money(l.after)}`});
+    }
+    if(l.after<=0.005&&l.pay>0)out.push({k:'g',t:`🎉 ปิดหนี้ "${d.name}" ได้แล้ว!`,s:'นำเงินที่เคยจ่ายหนี้ก้อนนี้ไปเพิ่มให้หนี้ก้อนถัดไปทันที (เอฟเฟกต์ก้อนหิมะ) อย่าปล่อยให้หายไปกับค่าใช้จ่ายอื่น'});
+  }
+
+  if(budget<minSum)out.push({k:'b',t:`งบจ่ายหนี้ต่อเดือน (${money(budget)}) น้อยกว่าผลรวมขั้นต่ำ ${money(minSum)}`,s:'ตั้งงบอย่างน้อยเท่าขั้นต่ำรวม ถ้าไม่พอควรเจรจาปรับโครงสร้างหนี้/ขยายงวดกับเจ้าหนี้'});
+
+  const sim=simulate(cur,budget,S.strategy);
+  const minOnly=simulate(cur,budget,'min');
+  const av=simulate(cur,budget,'avalanche'),sn=simulate(cur,budget,'snowball');
+  const target=[...active].sort((a,b)=>num(b.apr)-num(a.apr))[0];
+  const monthlyInt=active.reduce((s,d)=>s+cur[d.id]*num(d.apr)/1200,0);
+
+  out.push({k:'',t:`ตอนนี้เสียดอกเบี้ยประมาณ ${money(monthlyInt)}/เดือน จากหนี้รวม ${money(total)}`,s:`เท่ากับ ${(monthlyInt/Math.max(1,total)*100).toFixed(2)}% ของหนี้ต่อเดือน`});
+  if(!minOnly.ok)out.push({k:'b',t:'จ่ายแค่ขั้นต่ำ หนี้จะไม่มีวันหมด (ขั้นต่ำไม่ครอบคลุมดอกเบี้ย)',s:'ต้องจ่ายเกินขั้นต่ำหรือเจรจาลดดอกเบี้ย/รีไฟแนนซ์'});
+  if(target)out.push({k:'w',t:`เป้าหมายหลัก: โปะ "${target.name}" (ดอกเบี้ย ${target.apr}% ต่อปี) ก่อน`,s:`จ่ายขั้นต่ำหนี้อื่นให้ครบ แล้วนำเงินส่วนที่เหลือทั้งหมดลงก้อนนี้ — ${S.strategy==='snowball'?'ตอนนี้คุณเลือก Snowball ซึ่งเรียงตามยอดน้อยสุด':'วิธี Avalanche ประหยัดดอกเบี้ยที่สุด'}`});
+  if(sim.ok&&minOnly.ok){
+    const sv=minOnly.interest-sim.interest;
+    if(sv>1)out.push({k:'g',t:`ตามแผนปัจจุบันหมดหนี้ใน ${dur(sim.months)} (${mfmt(addMonths(sim.months))}) ประหยัดดอกเบี้ย ${money(sv)} และเร็วกว่าจ่ายขั้นต่ำ ${minOnly.months-sim.months} เดือน`});
+    else out.push({k:'',t:`ตามแผนปัจจุบันหมดหนี้ใน ${dur(sim.months)} (${mfmt(addMonths(sim.months))})`});
+  }else if(!sim.ok)out.push({k:'b',t:'ด้วยงบปัจจุบัน หนี้จะไม่หมดภายใน 50 ปี',s:'เพิ่มงบจ่ายหนี้หรือลดดอกเบี้ยโดยด่วน'});
+  // boost suggestion
+  const boost=Math.max(500,Math.round(Math.max(budget,minSum)*0.1/100)*100);
+  const b=simulate(cur,budget,S.strategy,boost);
+  if(sim.ok&&b.ok&&sim.months>b.months)out.push({k:'g',t:`ถ้าเพิ่มจ่ายอีก ${money(boost)}/เดือน จะหมดหนี้เร็วขึ้น ${sim.months-b.months} เดือน และประหยัดดอกเบี้ยอีก ${money(sim.interest-b.interest)}`,s:'ลองหาเงินเพิ่มจากตัดรายจ่ายไม่จำเป็น ขายของที่ไม่ใช้ หรือรายได้เสริม'});
+  if(av.ok&&sn.ok&&Math.abs(av.interest-sn.interest)>1)out.push({k:'',t:`เทียบวิธี: Avalanche ดอกเบี้ยรวม ${money(av.interest)} (${av.months} เดือน) vs Snowball ${money(sn.interest)} (${sn.months} เดือน)`,s:av.interest<sn.interest?`Avalanche ประหยัดกว่า ${money(sn.interest-av.interest)} — แต่ถ้าต้องการกำลังใจจากการปิดก้อนเล็กเร็ว ๆ ให้เลือก Snowball`:'Snowball ได้ผลไม่ต่างจาก Avalanche ในกรณีนี้'});
+  // high-rate specific
+  const hi=active.filter(d=>num(d.apr)>=18);
+  if(hi.length)out.push({k:'w',t:`หนี้ดอกเบี้ยสูง ≥18%/ปี: ${hi.map(d=>d.name).join(', ')}`,s:'พิจารณาโอนยอด/รวมหนี้ไปสินเชื่อดอกต่ำกว่า, ขอลดดอกเบี้ย/ปรับโครงสร้างกับเจ้าหนี้, หรือใช้เงินออมปิดก่อนถ้าดอกเบี้ยสูงกว่าผลตอบแทนเงินออม'});
+  const shady=active.filter(d=>d.type==='หนี้นอกระบบ'||num(d.apr)>=36);
+  if(shady.length)out.push({k:'b',t:`ดอกเบี้ยเกินกฎหมาย/หนี้นอกระบบ: ${shady.map(d=>d.name).join(', ')}`,s:'ดอกเบี้ยตามกฎหมายสูงสุด 15%/ปี ปรึกษาศูนย์ไกล่เกลี่ยหนี้ ธปท. (โทร 1213) หรือกรมการปกครอง/ศูนย์ดำรงธรรม 1567'});
+  out.push(...cashAdvice(cur));
+  // trend vs previous snapshot
+  const hist=history(ctx);
+  if(hist.length>=2){
+    const a=hist[hist.length-1],p=hist[hist.length-2];
+    const diff=a.total-p.total;
+    out.push({k:diff<0?'g':'w',t:`แนวโน้ม: หนี้รวม${diff<0?'ลดลง':'เพิ่มขึ้น'} ${money(Math.abs(diff))} เมื่อเทียบกับ ${dfmt(p.date)}`,s:diff<0?'ทำต่อเนื่องแบบนี้ได้เลย':'ตรวจสอบว่ามีการกู้เพิ่ม หรือยอดจ่ายน้อยกว่าดอกเบี้ยหรือไม่'});
+  }
+  return out;
+}
+
+// total balance at each event date
+function history(ctx){
+  const dates=new Set();
+  S.debts.forEach(d=>d.start&&dates.add(d.start));
+  S.logs.forEach(l=>dates.add(l.date));
+  const sorted=[...dates].sort();
+  const byDebt={};
+  S.debts.forEach(d=>byDebt[d.id]=ctx.rows.filter(r=>r.debtId===d.id).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id)));
+  return sorted.map(date=>{
+    let total=0;
+    for(const d of S.debts){
+      if((d.start||'')>date)continue;
+      let b=num(d.balance);
+      for(const r of byDebt[d.id]){if(r.date<=date)b=r.after;else break}
+      total+=b;
+    }
+    return{date,total};
+  });
+}
+
+/* ---------- Render ---------- */
+function render(){
+  const ctx=compute();
+  renderKpis(ctx);renderDebts(ctx);renderLog(ctx);renderPlan(ctx);renderChart(ctx);renderAdvice();renderCash(ctx);
+  $('#budget').value=S.budget||'';$('#strategy').value=S.strategy;
+  $('#lDebt').innerHTML=S.debts.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('')||'<option value="">— เพิ่มหนี้ก่อน —</option>';
+  if(!$('#lDate').value)$('#lDate').value=todayStr();
+}
+function ctxFull(){const c=compute();return c}
+
+function renderKpis(ctx){
+  const cur=ctx.cur;
+  const total=S.debts.reduce((s,d)=>s+(cur[d.id]||0),0);
+  const init=S.debts.reduce((s,d)=>s+num(d.balance),0)+S.logs.reduce((s,l)=>s+num(l.borrow),0);
+  const wapr=total>0?S.debts.reduce((s,d)=>s+(cur[d.id]||0)*num(d.apr),0)/total:0;
+  const mInt=S.debts.reduce((s,d)=>s+(cur[d.id]||0)*num(d.apr)/1200,0);
+  const minSum=S.debts.filter(d=>(cur[d.id]||0)>0.005).reduce((s,d)=>s+num(d.min),0);
+  const paid=S.logs.reduce((s,l)=>s+num(l.pay),0);
+  const intPaid=ctx.rows.reduce((s,r)=>s+r.interest,0);
+  const sim=simulate(cur,num(S.budget),S.strategy);
+  const pct=init>0?Math.max(0,Math.min(100,(1-total/init)*100)):0;
+  const k=(b,s)=>`<div class="kpi"><b>${b}</b><span>${s}</span></div>`;
+  $('#kpis').innerHTML=
+    k(money(total),'หนี้คงเหลือรวม')+
+    k(wapr.toFixed(2)+'%','ดอกเบี้ยเฉลี่ยถ่วงน้ำหนัก/ปี')+
+    k(money(mInt),'ดอกเบี้ยที่เสีย/เดือน (ประมาณ)')+
+    k(money(minSum),'ขั้นต่ำรวม/เดือน')+
+    k(money(paid),'จ่ายไปแล้วทั้งหมด')+
+    k(money(intPaid),'ดอกเบี้ยสะสมที่คิดแล้ว')+
+    k(S.debts.length&&total>0?(sim.ok?mfmt(addMonths(sim.months)):'—'):'—',S.debts.length&&total>0&&sim.ok?`คาดหมดหนี้ (${dur(sim.months)})`:'คาดหมดหนี้')+
+    `<div class="kpi"><b>${pct.toFixed(0)}%</b><span>ความคืบหน้า</span><div class="bar" style="margin-top:6px"><div style="width:${pct}%"></div></div></div>`;
+}
+
+function renderDebts(ctx){
+  const tb=$('#debtTable tbody');
+  tb.innerHTML=S.debts.map(d=>{
+    const cur=ctx.cur[d.id]||0,init=num(d.balance);
+    const pct=init>0?Math.max(0,Math.min(100,(1-cur/init)*100)):0;
+    return `<tr data-id="${d.id}">
+      <td><input data-f="name" value="${esc(d.name)}" style="min-width:110px"></td>
+      <td><select data-f="type">${TYPES.map(t=>`<option${t===d.type?' selected':''}>${t}</option>`).join('')}</select></td>
+      <td><input class="n" type="number" min="0" step="any" data-f="balance" value="${d.balance}" style="min-width:100px"></td>
+      <td><input type="date" data-f="start" value="${d.start||''}"></td>
+      <td><input class="n" type="number" min="0" step="any" data-f="apr" value="${d.apr}" style="width:80px"></td>
+      <td><input class="n" type="number" min="0" step="any" data-f="min" value="${d.min}" style="min-width:90px"></td>
+      <td class="n"><b class="${cur>0.005?'':'good'}">${money(cur)}</b></td>
+      <td class="n">${pct.toFixed(0)}%</td>
+      <td><button class="x" data-del="${d.id}" title="ลบ">✕</button></td></tr>`}).join('')||`<tr><td colspan="9" class="muted">ยังไม่มีหนี้ — กด "+ เพิ่มหนี้"</td></tr>`;
+}
+
+function renderLog(ctx){
+  $('#logTable tbody').innerHTML=ctx.rows.map(r=>`<tr>
+    <td>${dfmt(r.date)}</td><td>${esc(r.debt.name)}</td>
+    <td class="n">${fmt(r.prev)}</td><td class="n warn">${fmt(r.interest)}</td>
+    <td class="n ${r.borrow?'bad':''}">${r.borrow?fmt(r.borrow):'-'}</td>
+    <td class="n">${fmt(r.pay)}</td><td class="n good">${fmt(r.principal)}</td>
+    <td class="n"><b>${fmt(r.after)}</b></td>
+    <td>${esc(r.note||'')}</td>
+    <td><button class="x" data-dl="${r.id}" title="ลบรายการ">✕</button></td></tr>`).join('')||`<tr><td colspan="10" class="muted">ยังไม่มีบันทึก</td></tr>`;
+}
+
+function renderPlan(ctx){
+  const cur=ctx.cur,b=num(S.budget);
+  const active=S.debts.filter(d=>(cur[d.id]||0)>0.005);
+  const minSum=active.reduce((s,d)=>s+num(d.min),0);
+  $('#budgetHint').textContent=active.length?`ขั้นต่ำรวม ${money(minSum)}${b&&b<minSum?' — งบน้อยกว่าขั้นต่ำ!':''}`:'';
+  const row=(n,s)=>`<tr><td>${n}</td><td class="n">${s.ok?dur(s.months):'ไม่หมด'}</td><td class="n">${s.ok?money(s.interest):'-'}</td><td>${s.ok?mfmt(addMonths(s.months)):'-'}</td></tr>`;
+  if(!active.length){$('#cmp tbody').innerHTML='<tr><td colspan="4" class="muted">ไม่มีหนี้คงเหลือ</td></tr>';$('#order tbody').innerHTML='';return}
+  const mo=simulate(cur,b,'min'),av=simulate(cur,b,'avalanche'),sn=simulate(cur,b,'snowball');
+  $('#cmp tbody').innerHTML=row('จ่ายขั้นต่ำอย่างเดียว',mo)+row('Avalanche (ตามงบ)',av)+row('Snowball (ตามงบ)',sn);
+  const cur_=S.strategy==='snowball'?sn:av;
+  const ord=[...active].sort((a,c)=>(cur_.payoff[a.id]||999)-(cur_.payoff[c.id]||999));
+  $('#order tbody').innerHTML=ord.map((d,i)=>`<tr><td>${i+1}</td><td>${esc(d.name)} <span class="tag">${num(d.apr)}%</span></td><td>${cur_.payoff[d.id]?mfmt(addMonths(cur_.payoff[d.id])):'-'}</td></tr>`).join('');
+}
+
+function renderCash(ctx){
+  $('#cashTable tbody').innerHTML=S.cash.map(i=>`<tr data-id="${i.id}">
+    <td><input data-f="name" value="${esc(i.name)}" style="min-width:120px"></td>
+    <td><select data-f="kind">${Object.entries(KINDS).map(([k,v])=>`<option value="${k}"${k===i.kind?' selected':''}>${v}</option>`).join('')}</select></td>
+    <td><input class="n" type="number" min="0" step="any" data-f="amount" value="${i.amount}" style="min-width:100px"></td>
+    <td><select data-f="freq">${Object.entries(FREQ).map(([k,v])=>`<option value="${k}"${k===i.freq?' selected':''}>${v}</option>`).join('')}</select></td>
+    <td class="n ${i.kind==='income'?'good':''}">${fmt(mAmt(i))}</td>
+    <td><button class="x" data-cdel="${i.id}" title="ลบ">✕</button></td></tr>`).join('')||'<tr><td colspan="6" class="muted">ยังไม่มีรายการ — เช่น เงินเดือน, ค่าเช่า, ค่าอาหาร, ค่าเดินทาง</td></tr>';
+  $('#cashOnHand').value=S.cashOnHand||'';
+  const p=lifePlan(ctx.cur),box=$('#lifePlan');
+  if(!p){box.innerHTML='<p class="muted">ใส่รายรับอย่างน้อย 1 รายการ แล้วระบบจะคำนวณแผนใช้ชีวิตให้</p>';return}
+  const c=p.cf,r=(n,a,b)=>`<tr><td>${n}</td><td class="n">${a}</td><td class="n">${b}</td></tr>`;
+  const sc=(s)=>!s?'-':s.ok?`${dur(s.months)} (${mfmt(addMonths(s.months))})`:'ไม่หมด';
+  box.innerHTML=`<div class="scroll"><table><thead><tr><th>ต่อเดือน</th><th class="n">ตามที่กรอก</th><th class="n">แผนแนะนำ</th></tr></thead><tbody>
+    ${r('รายรับ',money(c.income),money(c.income))}
+    ${r('รายจ่ายจำเป็น',`${money(c.need)} (${(c.need/c.income*100).toFixed(0)}%)`,money(c.need))}
+    ${r('รายจ่ายตามใจ',`${money(c.want)} (${(c.want/c.income*100).toFixed(0)}%)`,`${money(p.wantRec)} (${(p.wantRec/c.income*100).toFixed(0)}%)`)}
+    ${r('ออม/ลงทุน',money(c.save),money(p.saveRec))}
+    ${r('<b>จ่ายหนี้ได้</b>',`<b>${money(p.budNow)}</b>`,`<b>${money(p.budRec)}</b>`)}
+    ${p.hasDebt?r('หมดหนี้ใน',sc(p.simNow),sc(p.simRec))+r('ดอกเบี้ยรวม',p.simNow&&p.simNow.ok?money(p.simNow.interest):'-',p.simRec&&p.simRec.ok?money(p.simRec.interest):'-'):''}
+    </tbody></table></div>
+    ${p.hasDebt?`<div class="row" style="margin:10px 0"><button data-usebud="${Math.round(p.budNow)}">ใช้งบ ${money(p.budNow)}</button><button class="pri" data-usebud="${Math.round(p.budRec)}">ใช้งบแนะนำ ${money(p.budRec)} เป็นงบจ่ายหนี้</button></div>`:''}
+    <div class="advice">${p.tips.map(i=>`<div class="${i.k}">${esc(i.t)}${i.s?`<small>${esc(i.s)}</small>`:''}</div>`).join('')}</div>`;
+}
+function renderAdvice(){
+  const a=S.lastAdvice;
+  if(!a){$('#advice').innerHTML='<div class="muted">บันทึกการจ่ายแล้วคำแนะนำจะขึ้นที่นี่</div>';$('#adviceWhen').textContent='';return}
+  $('#adviceWhen').textContent='(บันทึกเมื่อ '+dfmt(a.date)+')';
+  $('#advice').innerHTML=a.items.map(i=>`<div class="${i.k||''}">${esc(i.t)}${i.s?`<small>${esc(i.s)}</small>`:''}</div>`).join('');
+}
+
+function renderChart(ctx){
+  const svg=$('#chart');const W=800,H=300,L=64,R=16,T=14,B=34;
+  const hist=history(ctx);
+  const cs=getComputedStyle(document.documentElement);const col=n=>cs.getPropertyValue(n).trim();
+  const active=S.debts.some(d=>(ctx.cur[d.id]||0)>0.005);
+  const pm=active?simulate(ctx.cur,num(S.budget),'min'):null;
+  const ps=active?simulate(ctx.cur,num(S.budget),S.strategy):null;
+  if(!hist.length){svg.innerHTML=`<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="${col('--mute')}">ยังไม่มีข้อมูล</text>`;$('#legend').innerHTML='';$('#trendText').textContent='';return}
+  const t0=new Date(hist[0].date+'T00:00:00').getTime();
+  const now=Math.max(new Date(hist[hist.length-1].date+'T00:00:00').getTime(),new Date(todayStr()+'T00:00:00').getTime());
+  const MS=30.44*864e5;
+  const projLen=ps?Math.min(ps.series.length-1,240):0;
+  const proj=(s)=>s?s.series.slice(0,projLen+1).map((v,i)=>[now+i*MS,v]):[];
+  const actual=hist.map(h=>[new Date(h.date+'T00:00:00').getTime(),h.total]);
+  if(actual[actual.length-1][0]<now)actual.push([now,ctx?S.debts.reduce((s,d)=>s+(ctx.cur[d.id]||0),0):0]);
+  const lines=[{pts:actual,c:col('--pri'),w:2.5,d:''}];
+  if(ps&&ps.ok)lines.push({pts:proj(ps),c:col('--ok'),w:2,d:'6 4'});
+  if(pm&&pm.ok&&projLen)lines.push({pts:proj(pm).slice(0,Math.min(pm.series.length,projLen+1)),c:col('--bad'),w:1.5,d:'2 4'});
+  const xs=lines.flatMap(l=>l.pts.map(p=>p[0])),ys=lines.flatMap(l=>l.pts.map(p=>p[1]));
+  const x0=Math.min(...xs),x1=Math.max(...xs)||x0+1,ymax=Math.max(...ys,1)*1.05;
+  const X=x=>L+(x1===x0?0:(x-x0)/(x1-x0))*(W-L-R),Y=y=>T+(1-y/ymax)*(H-T-B);
+  let g='';
+  for(let i=0;i<=4;i++){const v=ymax*i/4,y=Y(v);g+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="${col('--line')}"/><text x="${L-6}" y="${y+4}" text-anchor="end" font-size="11" fill="${col('--mute')}">${v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?Math.round(v/1e3)+'k':Math.round(v)}</text>`}
+  for(let i=0;i<=4;i++){const x=x0+(x1-x0)*i/4;g+=`<text x="${X(x)}" y="${H-10}" text-anchor="${i==0?'start':i==4?'end':'middle'}" font-size="11" fill="${col('--mute')}">${mfmt(new Date(x))}</text>`}
+  if(now>x0&&now<x1)g+=`<line x1="${X(now)}" x2="${X(now)}" y1="${T}" y2="${H-B}" stroke="${col('--mute')}" stroke-dasharray="3 3"/><text x="${X(now)+4}" y="${T+10}" font-size="11" fill="${col('--mute')}">วันนี้</text>`;
+  for(const l of lines){g+=`<polyline fill="none" stroke="${l.c}" stroke-width="${l.w}" ${l.d?`stroke-dasharray="${l.d}"`:''} stroke-linejoin="round" points="${l.pts.map(p=>X(p[0]).toFixed(1)+','+Y(p[1]).toFixed(1)).join(' ')}"/>`}
+  if(actual.length<=40)for(const p of actual)g+=`<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="3.5" fill="${col('--pri')}"><title>${mfmt(new Date(p[0]))}: ${money(p[1])}</title></circle>`;
+  svg.innerHTML=g;
+  $('#legend').innerHTML=`<span><i style="background:${col('--pri')}"></i>หนี้รวมจริง</span>`+(ps&&ps.ok?`<span><i style="background:${col('--ok')}"></i>คาดการณ์ตามแผน (${S.strategy==='snowball'?'Snowball':'Avalanche'})</span>`:'')+(pm&&pm.ok?`<span><i style="background:${col('--bad')}"></i>คาดการณ์จ่ายขั้นต่ำ</span>`:'');
+  const first=hist[0].total,lastV=actual[actual.length-1][1];
+  $('#trendText').innerHTML=hist.length<2?'<span class="muted">บันทึกเพิ่มอีกหลายรายการเพื่อดูแนวโน้ม</span>':
+    `ตั้งแต่ ${dfmt(hist[0].date)}: หนี้รวม <b class="${lastV<=first?'good':'bad'}">${lastV<=first?'ลดลง':'เพิ่มขึ้น'} ${money(Math.abs(lastV-first))}</b> (${first?((lastV-first)/first*100).toFixed(1):0}%)`;
+}
+
+/* ---------- Events ---------- */
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),2200)}
+
+$('#addDebt').onclick=()=>{
+  S.debts.push({id:uid(),name:'หนี้ใหม่',type:TYPES[0],balance:0,apr:0,min:0,start:todayStr()});
+  save();render();
+  const inp=$('#debtTable tbody tr:last-child input[data-f=name]');inp&&(inp.focus(),inp.select());
+};
+$('#debtTable').addEventListener('change',e=>{
+  const f=e.target.dataset.f;if(!f)return;
+  const d=S.debts.find(x=>x.id===e.target.closest('tr').dataset.id);if(!d)return;
+  d[f]=['balance','apr','min'].includes(f)?num(e.target.value):e.target.value;
+  save();render();
+});
+function refreshAdvice(){S.lastAdvice={date:todayStr(),items:analyse(compute())};save();render()}
+$('#addCash').onclick=()=>{S.cash.push({id:uid(),name:S.cash.length?'รายการใหม่':'เงินเดือน',kind:S.cash.length?'need':'income',amount:0,freq:'month'});save();render();const i=$('#cashTable tbody tr:last-child input[data-f=name]');i&&(i.focus(),i.select())};
+$('#cashTable').addEventListener('change',e=>{
+  const f=e.target.dataset.f;if(!f)return;
+  const i=S.cash.find(x=>x.id===e.target.closest('tr').dataset.id);if(!i)return;
+  i[f]=f==='amount'?num(e.target.value):e.target.value;refreshAdvice();
+});
+$('#cashOnHand').addEventListener('change',e=>{S.cashOnHand=num(e.target.value);refreshAdvice()});
+document.addEventListener('click',e=>{
+  if(e.target.dataset.cdel){S.cash=S.cash.filter(x=>x.id!==e.target.dataset.cdel);refreshAdvice();return}
+  if(e.target.dataset.usebud){S.budget=num(e.target.dataset.usebud);refreshAdvice();toast('ตั้งงบจ่ายหนี้แล้ว');return}
+  const del=e.target.dataset.del,dl=e.target.dataset.dl;
+  if(del){const d=S.debts.find(x=>x.id===del);if(confirm(`ลบ "${d.name}" และบันทึกทั้งหมดของหนี้นี้?`)){S.debts=S.debts.filter(x=>x.id!==del);S.logs=S.logs.filter(l=>l.debtId!==del);save();render()}}
+  if(dl){S.logs=S.logs.filter(l=>l.id!==dl);save();render();toast('ลบรายการแล้ว')}
+});
+$('#logForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const debtId=$('#lDebt').value;if(!debtId)return toast('เพิ่มหนี้ก่อน');
+  const pay=num($('#lPay').value),borrow=num($('#lBorrow').value);
+  if(!pay&&!borrow)return toast('กรอกยอดจ่ายหรือยอดกู้เพิ่ม');
+  const l={id:uid(),date:$('#lDate').value||todayStr(),debtId,pay,borrow,note:$('#lNote').value.trim()};
+  S.logs.push(l);
+  const ctx=compute();
+  const row=ctx.rows.find(r=>r.id===l.id);
+  const items=analyse({...ctx,lastLog:row});
+  S.lastAdvice={date:l.date,items};
+  save();render();
+  $('#lPay').value=0;$('#lBorrow').value=0;$('#lNote').value='';
+  toast('บันทึกแล้ว · ดูคำแนะนำด้านบน');
+  $('#adviceBox').scrollIntoView({behavior:'smooth',block:'start'});
+});
+$('#budget').addEventListener('change',e=>{S.budget=num(e.target.value);const c=compute();S.lastAdvice={date:todayStr(),items:analyse(c)};save();render()});
+$('#strategy').addEventListener('change',e=>{S.strategy=e.target.value;const c=compute();S.lastAdvice={date:todayStr(),items:analyse(c)};save();render()});
+
+$('#sample').onclick=()=>{
+  if(S.debts.length&&!confirm('แทนที่ข้อมูลปัจจุบันด้วยตัวอย่าง?'))return;
+  const mk=(n)=>{const d=new Date();d.setMonth(d.getMonth()-n);return d.toISOString().slice(0,10)};
+  const a={id:uid(),name:'บัตรเครดิต A',type:'บัตรเครดิต',balance:60000,apr:18,min:3000,start:mk(3)};
+  const b={id:uid(),name:'สินเชื่อส่วนบุคคล',type:'สินเชื่อส่วนบุคคล',balance:150000,apr:25,min:5500,start:mk(3)};
+  const c={id:uid(),name:'ผ่อนมือถือ',type:'ผ่อนสินค้า',balance:20000,apr:10,min:2000,start:mk(3)};
+  S={debts:[a,b,c],cash:[{id:uid(),name:'เงินเดือน',kind:'income',amount:45000,freq:'month'},{id:uid(),name:'ค่าเช่า/ที่พัก',kind:'need',amount:9000,freq:'month'},{id:uid(),name:'ค่าอาหาร',kind:'need',amount:7000,freq:'month'},{id:uid(),name:'ค่าเดินทาง+เน็ต+โทร',kind:'need',amount:4000,freq:'month'},{id:uid(),name:'ท่องเที่ยว/ช้อป/กินนอกบ้าน',kind:'want',amount:10000,freq:'month'}],cashOnHand:20000,budget:16000,strategy:'avalanche',lastAdvice:null,logs:[
+    {id:uid(),date:mk(2),debtId:a.id,pay:3000,borrow:0,note:''},{id:uid(),date:mk(2),debtId:b.id,pay:5500,borrow:0,note:''},{id:uid(),date:mk(2),debtId:c.id,pay:2000,borrow:0,note:''},
+    {id:uid(),date:mk(1),debtId:a.id,pay:3000,borrow:2000,note:'รูดซื้อของ'},{id:uid(),date:mk(1),debtId:b.id,pay:7000,borrow:0,note:''},{id:uid(),date:mk(1),debtId:c.id,pay:2000,borrow:0,note:''}]};
+  const ctx=compute();const last=ctx.rows.find(r=>r.debtId===b.id);
+  S.lastAdvice={date:todayStr(),items:analyse({...ctx,lastLog:last})};
+  save();render();
+};
+$('#exp').onclick=()=>dl('debt-tracker.json',JSON.stringify(S,null,2),'application/json');
+$('#expCsv').onclick=()=>{
+  const r=compute().rows.slice().reverse();
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  dl('debt-log.csv','﻿'+['วันที่,หนี้,ยอดก่อนหน้า,ดอกเบี้ย,กู้เพิ่ม,จ่าย,ตัดต้น,คงเหลือ,หมายเหตุ',...r.map(x=>[x.date,q(x.debt.name),x.prev.toFixed(2),x.interest.toFixed(2),x.borrow,x.pay,x.principal.toFixed(2),x.after.toFixed(2),q(x.note)].join(','))].join('\n'),'text/csv');
+};
+function dl(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+$('#imp').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  f.text().then(t=>{try{const s=JSON.parse(t);if(!Array.isArray(s.debts)||!Array.isArray(s.logs))throw 0;S={budget:0,strategy:'avalanche',lastAdvice:null,cash:[],cashOnHand:0,...s};save();render();toast('นำเข้าแล้ว')}catch(_){toast('ไฟล์ไม่ถูกต้อง')}});
+  e.target.value='';
+};
+$('#reset').onclick=()=>{if(confirm('ล้างข้อมูลทั้งหมด?')){S={debts:[],logs:[],cash:[],cashOnHand:0,budget:0,strategy:'avalanche',lastAdvice:null};save();render()}};
+matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',render);
+render();
+</script>
+</body>
+</html>
