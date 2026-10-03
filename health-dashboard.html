@@ -446,8 +446,32 @@ function mergeByDate(list){
   return out;
 }
 function setRaw(list){raw=list;recs=mergeByDate(list);refresh()}
-function applySnap(snap){setRaw(snap.docs.map(function(d){var o=d.data()||{};o.id=d.id;return o}).filter(function(r){return r.date&&r.values}))}
-async function refetch(){if(mode==='db'&&col){try{applySnap(await col.get())}catch(e){}}}
+// Reading: a collection query first; if this view can't run queries, read an index document of ids
+// and fetch each document directly. The last good result is cached on this device as a fallback.
+var idxRef=null,knownIds=[],dbNote='';
+function errTxt(e){return String(e&&(e.code||e.message)||e||'unknown').slice(0,90)}
+function docsToRaw(docs){return docs.map(function(d){var o=d.data()||{};o.id=d.id;return o}).filter(function(r){return r.date&&r.values})}
+function cacheRaw(list){try{localStorage.setItem('hd_cache',JSON.stringify(list))}catch(e){}}
+function applySnap(snap){if(snap&&snap.metadata&&snap.metadata.fromCache&&!snap.docs.length&&raw.length)return;var l=docsToRaw(snap.docs);knownIds=l.map(function(r){return r.id});cacheRaw(l);setRaw(l)}
+async function loadAll(){
+  var e1;
+  try{return docsToRaw((await col.get()).docs)}catch(e){e1=e}
+  var ix=await idxRef.get(),ids=ix&&ix.exists&&ix.data()&&Array.isArray(ix.data().ids)?ix.data().ids:[],out=[];
+  for(var i=0;i<ids.length;i++){var d=await col.doc(String(ids[i])).get();if(d&&d.exists){var o=d.data()||{};o.id=d.id;if(o.date&&o.values)out.push(o)}}
+  dbNote=' · อ่านผ่านดัชนี ('+errTxt(e1)+')';
+  return out;
+}
+async function saveIndex(){if(idxRef){try{await idxRef.set({ids:knownIds.slice(),updatedAt:Date.now()})}catch(e){}}}
+async function refetch(){
+  if(!(mode==='db'&&col))return;
+  try{var l=await loadAll();knownIds=l.map(function(r){return r.id});cacheRaw(l);setRaw(l);
+    $('syncNote').textContent='บันทึกไว้ในบัญชีของคุณ เปิดดูได้ทุกเครื่องที่ล็อกอินบัญชีเดียวกัน'+dbNote}
+  catch(e){
+    var c=null;try{c=JSON.parse(localStorage.getItem('hd_cache')||'null')}catch(x){}
+    if(c&&c.length)setRaw(c);
+    $('syncNote').textContent='อ่านข้อมูลจากบัญชีไม่สำเร็จ ('+errTxt(e)+')'+(c&&c.length?' แสดงข้อมูลที่บันทึกล่าสุดในเครื่องนี้':'')+' ส่งข้อความนี้ให้ Claude ได้';
+  }
+}
 function hasVals(r){return r&&r.values&&Object.keys(r.values).length>0}
 function sorted(){return recs.slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0})}
 function series(k){return sorted().filter(function(r){return r.values&&r.values[k]!=null}).map(function(r){return {t:+new Date(r.date+'T00:00:00'),date:r.date,v:+r.values[k],r:r}})}
@@ -629,7 +653,7 @@ async function delRec(id){
   confirmDel=null;
   var r=recs.filter(function(x){return x.id===id})[0];if(!r)return;
   var ids=r.ids||[r.id];
-  if(mode==='db'&&col){for(var i=0;i<ids.length;i++){try{await col.doc(ids[i]).delete()}catch(e){}}await refetch()}
+  if(mode==='db'&&col){for(var i=0;i<ids.length;i++){try{await col.doc(ids[i]).delete()}catch(e){}}knownIds=knownIds.filter(function(x){return ids.indexOf(x)<0});await saveIndex();await refetch()}
   else{setRaw(raw.filter(function(x){return ids.indexOf(x.id)<0}));saveLocal()}
 }
 // write a merged checkup back as one document and remove its duplicates
@@ -638,6 +662,7 @@ async function writeMerged(r,vals,imgs){
   if(mode==='db'&&col){
     await col.doc(r.id).update({values:vals,imageIds:imgs,pending:!Object.keys(vals).length});
     for(var i=0;i<others.length;i++){try{await col.doc(others[i]).delete()}catch(e){}}
+    if(others.length){knownIds=knownIds.filter(function(x){return others.indexOf(x)<0});await saveIndex()}
   }else{
     var keep=raw.filter(function(x){return others.indexOf(x.id)<0});
     keep.forEach(function(x){if(x.id===r.id){x.values=vals;x.imageIds=imgs;x.pending=!Object.keys(vals).length}});
@@ -742,7 +767,7 @@ function upNote(n){
   $('galMsg').textContent='อัปโหลดภาพไม่สำเร็จ '+upFail+' ภาพ ('+(upCode==='no_assets'?'มุมมองนี้ไม่ให้อัปโหลดภาพ ต้องเปิดในฐานะเจ้าของหน้า':'รหัส '+upCode)+') ผลตรวจบันทึกแล้วแต่ไม่มีภาพแนบ';
 }
 async function persist(rec){
-  if(mode==='db'&&col){var ref=await col.add(rec);return ref.id}
+  if(mode==='db'&&col){var ref=await col.add(rec);knownIds.push(ref.id);raw=raw.concat([Object.assign({id:ref.id},rec)]);cacheRaw(raw);await saveIndex();return ref.id}
   rec.id='l-'+Date.now()+'-'+Math.floor(Math.random()*1e4);raw=raw.concat([rec]);mode='local';saveLocal();setRaw(raw);return rec.id;
 }
 async function saveAll(){
@@ -1019,8 +1044,9 @@ refresh();
     if(db&&user&&user.id){
       var uid=await user.id();
       col=db.collection('data/users/'+uid+'/checkups/items');mode='db';$('syncNote').textContent='บันทึกไว้ในบัญชีของคุณ เปิดดูได้ทุกเครื่องที่ล็อกอินบัญชีเดียวกัน';
-      try{applySnap(await col.get())}catch(e){$('syncNote').textContent='โหลดข้อมูลจากบัญชีไม่สำเร็จ ('+((e&&e.code)||'error')+') ลองรีเฟรชหน้า'}
-      col.onSnapshot(applySnap,function(e){$('syncNote').textContent='บันทึกไว้ในบัญชีของคุณ (อัปเดตอัตโนมัติไม่ได้ หน้าจะโหลดข้อมูลใหม่หลังบันทึกทุกครั้ง)'});
+      idxRef=db.doc('data/users/'+uid+'/index');
+      await refetch();
+      try{col.onSnapshot(applySnap,function(){})}catch(e){}
       return;
     }
   }catch(e){}
