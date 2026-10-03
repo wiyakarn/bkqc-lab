@@ -450,14 +450,16 @@ function setRaw(list){raw=list;recs=mergeByDate(list);refresh()}
 // and fetch each document directly. The last good result is cached on this device as a fallback.
 var idxRef=null,knownIds=[],dbNote='';
 function errTxt(e){return String(e&&(e.code||e.message)||e||'unknown').slice(0,90)}
-function docsToRaw(docs){return docs.map(function(d){var o=d.data()||{};o.id=d.id;return o}).filter(function(r){return r.date&&r.values})}
+// records from the store can be read-only: copy before adding fields
+function plain(x){return JSON.parse(JSON.stringify(x||{}))}
+function docsToRaw(docs){return docs.map(function(d){var o=plain(d.data());o.id=d.id;return o}).filter(function(r){return r.date&&r.values})}
 function cacheRaw(list){try{localStorage.setItem('hd_cache',JSON.stringify(list))}catch(e){}}
 function applySnap(snap){if(snap&&snap.metadata&&snap.metadata.fromCache&&!snap.docs.length&&raw.length)return;var l=docsToRaw(snap.docs);knownIds=l.map(function(r){return r.id});cacheRaw(l);setRaw(l)}
 async function loadAll(){
   var e1;
   try{return docsToRaw((await col.get()).docs)}catch(e){e1=e}
   var ix=await idxRef.get(),ids=ix&&ix.exists&&ix.data()&&Array.isArray(ix.data().ids)?ix.data().ids:[],out=[];
-  for(var i=0;i<ids.length;i++){var d=await col.doc(String(ids[i])).get();if(d&&d.exists){var o=d.data()||{};o.id=d.id;if(o.date&&o.values)out.push(o)}}
+  for(var i=0;i<ids.length;i++){var d=await col.doc(String(ids[i])).get();if(d&&d.exists){var o=plain(d.data());o.id=d.id;if(o.date&&o.values)out.push(o)}}
   dbNote=' · อ่านผ่านดัชนี ('+errTxt(e1)+')';
   return out;
 }
