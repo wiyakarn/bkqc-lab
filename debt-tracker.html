@@ -55,7 +55,7 @@ details summary{cursor:pointer;color:var(--mute)}
 <body>
 <header>
   <h1>ตารางบันทึกหนี้</h1>
-  <p>กรอกเองได้ · คำนวณดอกเบี้ย/ยอดคงเหลืออัตโนมัติ · วิเคราะห์แนวโน้ม · แนะนำวิธีปิดหนี้ให้เร็วขึ้นทุกครั้งที่บันทึก (ข้อมูลเก็บในเบราว์เซอร์ของคุณเท่านั้น)</p>
+  <p><span id="sync" class="muted">กำลังเชื่อมต่อการซิงค์…</span><br>กรอกเองได้ · คำนวณดอกเบี้ย/ยอดคงเหลืออัตโนมัติ · วิเคราะห์แนวโน้ม · แนะนำวิธีปิดหนี้ให้เร็วขึ้นทุกครั้งที่บันทึก (ข้อมูลเก็บในเครื่อง และซิงค์ข้ามอุปกรณ์เมื่อเปิดผ่านลิงก์ claude.ai ด้วยบัญชีเดียวกัน)</p>
 </header>
 <main>
 
@@ -166,7 +166,49 @@ const num=v=>{const x=parseFloat(v);return isFinite(x)&&x>=0?x:0};
 
 let S=load();S.cash=S.cash||[];S.cashOnHand=S.cashOnHand||0;
 function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.debts))return s}catch(e){}return{debts:[],logs:[],cash:[],cashOnHand:0,budget:0,strategy:'avalanche',lastAdvice:null}}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function save(){S._ts=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}pushCloud()}
+
+/* ---------- Cloud sync (claude.ai db, private per account) ---------- */
+let cloudRef=null,pushTimer=null,lastPushed=0;
+function setSync(t,c){const el=$('#sync');el.textContent=t;el.className=c||'muted'}
+function pushCloud(){
+  if(!cloudRef)return;
+  setSync('กำลังซิงค์…','muted');
+  clearTimeout(pushTimer);
+  pushTimer=setTimeout(()=>{
+    const ts=S._ts||0;
+    cloudRef.set({json:JSON.stringify(S),ts}).then(()=>{lastPushed=ts;setSync('☁ ซิงค์แล้ว','good')},e=>setSync(e&&e.code==='quota_exceeded'?'⚠ ข้อมูลเยอะเกินที่ซิงค์ได้':'⚠ ซิงค์ไม่สำเร็จ (บันทึกในเครื่องแล้ว)','warn'));
+  },600);
+}
+function adoptRemote(doc){
+  try{
+    const r=JSON.parse(doc.json);if(!r||!Array.isArray(r.debts))return;
+    S={budget:0,strategy:'avalanche',lastAdvice:null,cash:[],cashOnHand:0,logs:[],...r,_ts:doc.ts};
+    try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
+    render();setSync('☁ ซิงค์แล้ว (อัปเดตจากอุปกรณ์อื่น)','good');
+  }catch(e){}
+}
+(async()=>{
+  try{
+    const [user,db]=await Promise.all([claude.use('user'),claude.use('db')]);
+    if(!user||!db){setSync('บันทึกในเครื่องนี้เท่านั้น — เปิดลิงก์ในแอป claude.ai ที่ล็อกอินเพื่อซิงค์หลายอุปกรณ์','muted');return}
+    const uid=await user.id();
+    if(!uid){setSync('บันทึกในเครื่องนี้เท่านั้น (ยังไม่ได้ล็อกอิน)','muted');return}
+    const ref=db.collection('data/users/'+uid).doc('debt-state');
+    let first=true;
+    ref.onSnapshot(snap=>{
+      const d=snap.exists?snap.data():null;
+      const local=S._ts||0,has=S.debts.length||S.logs.length||S.cash.length;
+      if(first){
+        first=false;cloudRef=ref;
+        if(d&&(d.ts||0)>local)return adoptRemote(d);
+        if(has&&(!d||local>(d.ts||0))){lastPushed=0;return pushCloud()}
+        setSync('☁ ซิงค์แล้ว','good');return;
+      }
+      if(d&&(d.ts||0)>(S._ts||0)&&d.ts!==lastPushed)adoptRemote(d);
+    },()=>setSync('⚠ ซิงค์ไม่สำเร็จ (บันทึกในเครื่องแล้ว)','warn'));
+  }catch(e){setSync('บันทึกในเครื่องนี้เท่านั้น','muted')}
+})();
 
 /* ---------- Core calc ---------- */
 const dayDiff=(a,b)=>Math.max(0,Math.round((new Date(b)-new Date(a))/864e5));
