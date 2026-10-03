@@ -70,6 +70,21 @@ details summary{cursor:pointer;color:var(--mute)}
 </section>
 
 <section>
+  <h2>0) รายรับ–รายจ่ายประจำ (ต่อเดือน)</h2>
+  <div class="scroll"><table id="cashTable">
+    <thead><tr><th>รายการ</th><th>ประเภท</th><th class="n">จำนวน (฿)</th><th>ความถี่</th><th class="n">เฉลี่ย/เดือน</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <div class="row" style="margin-top:10px">
+    <button class="pri" id="addCash">+ เพิ่มรายรับ/รายจ่าย</button>
+    <label>เงินสดสำรองที่มีตอนนี้ (฿)<input type="number" id="cashOnHand" min="0" step="any" style="width:170px"></label>
+    <span class="muted">ไม่ต้องใส่ค่างวดหนี้ในรายจ่าย — ระบบคิดจากรายการหนี้ให้</span>
+  </div>
+  <h2 style="margin-top:18px">แผนใช้ชีวิตจากรายรับ–รายจ่าย</h2>
+  <div id="lifePlan"></div>
+</section>
+
+<section>
   <h2>1) รายการหนี้</h2>
   <div class="scroll"><table id="debtTable">
     <thead><tr><th>ชื่อหนี้</th><th>ประเภท</th><th class="n">ยอดตั้งต้น (฿)</th><th>วันที่เริ่มนับ</th><th class="n">ดอกเบี้ย %/ปี</th><th class="n">ขั้นต่ำ/เดือน (฿)</th><th class="n">ยอดคงเหลือตอนนี้</th><th class="n">ปิดแล้ว</th><th></th></tr></thead>
@@ -149,8 +164,8 @@ const dfmt=s=>s?new Date(s+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric
 const mfmt=d=>d.toLocaleDateString('th-TH',{month:'short',year:'2-digit'});
 const num=v=>{const x=parseFloat(v);return isFinite(x)&&x>=0?x:0};
 
-let S=load();
-function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.debts))return s}catch(e){}return{debts:[],logs:[],budget:0,strategy:'avalanche',lastAdvice:null}}
+let S=load();S.cash=S.cash||[];S.cashOnHand=S.cashOnHand||0;
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.debts))return s}catch(e){}return{debts:[],logs:[],cash:[],cashOnHand:0,budget:0,strategy:'avalanche',lastAdvice:null}}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
 /* ---------- Core calc ---------- */
@@ -203,6 +218,48 @@ function simulate(balances,budget,mode,extraBoost=0){
 const addMonths=(n)=>{const d=new Date();d.setMonth(d.getMonth()+n);return d};
 const dur=m=>m>=600?'ไม่มีวันหมด':(m>=12?Math.floor(m/12)+' ปี ':'')+(m%12?m%12+' เดือน':(m>=12?'':'0 เดือน'));
 
+/* ---------- Cash flow / life plan ---------- */
+const KINDS={income:'รายรับ',need:'รายจ่ายจำเป็น',want:'รายจ่ายตามใจ/ไลฟ์สไตล์',save:'ออม/ลงทุน'};
+const FREQ={month:'ต่อเดือน',week:'ต่อสัปดาห์',year:'ต่อปี'};
+const mAmt=i=>num(i.amount)*({month:1,week:52/12,year:1/12}[i.freq]||1);
+function cashflow(){const sum=k=>S.cash.filter(i=>i.kind===k).reduce((s,i)=>s+mAmt(i),0);return{income:sum('income'),need:sum('need'),want:sum('want'),save:sum('save')}}
+function lifePlan(cur){
+  const cf=cashflow();if(!cf.income)return null;
+  const active=S.debts.filter(d=>(cur[d.id]||0)>0.005);
+  const minSum=active.reduce((s,d)=>s+num(d.min),0);
+  const hand=num(S.cashOnHand);
+  const short=hand<cf.need;
+  const saveRec=short?Math.max(cf.save,cf.income*0.05):cf.save;
+  const wantRec=Math.min(cf.want,cf.income*0.2);
+  const budNow=Math.max(0,cf.income-cf.need-cf.want-cf.save);
+  const budRec=Math.max(0,cf.income-cf.need-wantRec-saveRec);
+  const hasDebt=active.length>0;
+  const simNow=hasDebt?simulate(cur,budNow,S.strategy):null,simRec=hasDebt?simulate(cur,budRec,S.strategy):null;
+  const tips=[];
+  const pct=v=>(v/cf.income*100).toFixed(0)+'%';
+  if(cf.income<cf.need+minSum)tips.push({k:'b',t:`รายรับ ${money(cf.income)} ไม่พอจ่ายรายจ่ายจำเป็น + ขั้นต่ำหนี้ (${money(cf.need+minSum)}) ขาด ${money(cf.need+minSum-cf.income)}/เดือน`,s:'ทำพร้อมกัน: หารายได้เสริม, ลดค่าใช้จ่ายจำเป็นที่ต่อรองได้ (ค่าเช่า/ประกัน/โทรศัพท์/อินเทอร์เน็ต), และเจรจาเจ้าหนี้ขอลดค่างวดหรือขยายเวลา ก่อนจะผิดนัดชำระ'});
+  if(hasDebt){const dti=minSum/cf.income*100;if(dti>=40)tips.push({k:'b',t:`ค่างวดขั้นต่ำคิดเป็น ${dti.toFixed(0)}% ของรายได้ (เกณฑ์ปลอดภัย ≤ 30–40%)`,s:'ภาระหนักมาก ควรปรับโครงสร้างหนี้/รวมหนี้ให้ดอกต่ำลง และห้ามก่อหนี้ใหม่'});else if(dti>=30)tips.push({k:'w',t:`ค่างวดขั้นต่ำคิดเป็น ${dti.toFixed(0)}% ของรายได้`,s:'เริ่มตึง ระวังเหตุฉุกเฉิน ควรเร่งปิดก้อนที่ดอกสูงและงดก่อหนี้ใหม่'})}
+  if(cf.need/cf.income>0.5)tips.push({k:'w',t:`รายจ่ายจำเป็น ${pct(cf.need)} ของรายได้ (เกณฑ์ ≤ 50%)`,s:'ลองทบทวนหมวดใหญ่ที่สุดก่อน: ที่อยู่ ค่าเดินทาง อาหาร ประกัน แล้วต่อรองหรือเปลี่ยนแพ็กเกจ'});
+  if(cf.want>wantRec+1)tips.push({k:'w',t:`รายจ่ายตามใจ ${money(cf.want)} (${pct(cf.want)} ของรายได้) — ลดลงเหลือ ${money(wantRec)} (20%) ชั่วคราวจนกว่าจะปิดหนี้`,s:`ลดได้ ${money(cf.want-wantRec)}/เดือน เอาไปโปะหนี้ทั้งหมด จะเร็วขึ้น${simNow&&simRec&&simNow.ok&&simRec.ok&&simNow.months>simRec.months?' '+(simNow.months-simRec.months)+' เดือน':''}`});
+  const ent=wantRec;
+  tips.push({k:'g',t:`ใช้ชีวิตตามแผน: งบตามใจ ${money(ent)}/เดือน ≈ ${money(Math.round(ent/(52/12)))}/สัปดาห์ ≈ ${money(Math.round(ent/30))}/วัน`,s:'แยกบัญชี/เงินสดไว้ใช้ส่วนนี้โดยเฉพาะ หมดแล้วหยุด ห้ามรูดบัตรหรือกู้เพิ่ม'});
+  if(hasDebt)tips.push({k:'',t:`วันเงินเดือนออก: โอนจ่ายหนี้ ${money(budRec)} ก่อนทันที แล้วค่อยใช้ส่วนที่เหลือ`,s:'ตั้งโอนอัตโนมัติวันเดียวกับรายได้เข้า จะได้ไม่ใช้เงินส่วนนี้ก่อน'});
+  if(cf.need>0){const mo=hand/cf.need;
+    if(mo<1)tips.push({k:'w',t:`เงินสำรองครอบคลุมรายจ่ายจำเป็นได้ ${mo.toFixed(1)} เดือน`,s:`ตั้งเป้ากองทุนฉุกเฉินเริ่มต้น ${money(cf.need)} (1 เดือน) ก่อน เพื่อไม่ต้องกู้เมื่อมีเหตุไม่คาดฝัน — แผนแนะนำจึงกันเงินออม ${money(saveRec)}/เดือน`});
+    else if(hasDebt)tips.push({k:'g',t:`เงินสำรองครอบคลุม ${mo.toFixed(1)} เดือน — พอสำหรับช่วงผ่อนหนี้`,s:'ใช้เงินส่วนเกินโปะหนี้ดอกสูงได้เต็มที่ และเมื่อหมดหนี้ให้สะสมให้ถึง 3–6 เดือน'});
+    else tips.push({k:'g',t:`เงินสำรองครอบคลุม ${mo.toFixed(1)} เดือน`,s:mo<3?'สะสมให้ถึง 3–6 เดือน แล้วเริ่มลงทุนระยะยาว':'ถึงเป้าแล้ว ต่อไปออม/ลงทุนระยะยาวและกองทุนเกษียณ'});}
+  return{cf,minSum,budNow,budRec,saveRec,wantRec,simNow,simRec,tips,hasDebt};
+}
+function cashAdvice(cur){
+  const p=lifePlan(cur);if(!p)return[];
+  const o=[];
+  const worst=p.tips.find(t=>t.k==='b');
+  if(worst)o.push(worst);
+  if(p.hasDebt&&p.budRec>p.budNow+1)o.push({k:'g',t:`รายรับ–รายจ่าย: ตัดรายจ่ายตามใจเหลือ 20% ได้งบจ่ายหนี้ ${money(p.budRec)}/เดือน (ตอนนี้ ${money(p.budNow)})`,s:'กด "ใช้งบนี้" ในส่วนแผนใช้ชีวิตเพื่อตั้งงบจ่ายหนี้'});
+  else if(p.hasDebt)o.push({k:'',t:`รายรับ–รายจ่าย: เหลือจ่ายหนี้ได้ ${money(p.budNow)}/เดือน`});
+  return o;
+}
+
 /* ---------- Analysis / advice ---------- */
 function analyse(ctx){ // ctx: {rows,cur, lastLog?}
   const out=[];const {cur}=ctx;
@@ -252,6 +309,7 @@ function analyse(ctx){ // ctx: {rows,cur, lastLog?}
   if(hi.length)out.push({k:'w',t:`หนี้ดอกเบี้ยสูง ≥18%/ปี: ${hi.map(d=>d.name).join(', ')}`,s:'พิจารณาโอนยอด/รวมหนี้ไปสินเชื่อดอกต่ำกว่า, ขอลดดอกเบี้ย/ปรับโครงสร้างกับเจ้าหนี้, หรือใช้เงินออมปิดก่อนถ้าดอกเบี้ยสูงกว่าผลตอบแทนเงินออม'});
   const shady=active.filter(d=>d.type==='หนี้นอกระบบ'||num(d.apr)>=36);
   if(shady.length)out.push({k:'b',t:`ดอกเบี้ยเกินกฎหมาย/หนี้นอกระบบ: ${shady.map(d=>d.name).join(', ')}`,s:'ดอกเบี้ยตามกฎหมายสูงสุด 15%/ปี ปรึกษาศูนย์ไกล่เกลี่ยหนี้ ธปท. (โทร 1213) หรือกรมการปกครอง/ศูนย์ดำรงธรรม 1567'});
+  out.push(...cashAdvice(cur));
   // trend vs previous snapshot
   const hist=history(ctx);
   if(hist.length>=2){
@@ -285,7 +343,7 @@ function history(ctx){
 /* ---------- Render ---------- */
 function render(){
   const ctx=compute();
-  renderKpis(ctx);renderDebts(ctx);renderLog(ctx);renderPlan(ctx);renderChart(ctx);renderAdvice();
+  renderKpis(ctx);renderDebts(ctx);renderLog(ctx);renderPlan(ctx);renderChart(ctx);renderAdvice();renderCash(ctx);
   $('#budget').value=S.budget||'';$('#strategy').value=S.strategy;
   $('#lDebt').innerHTML=S.debts.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('')||'<option value="">— เพิ่มหนี้ก่อน —</option>';
   if(!$('#lDate').value)$('#lDate').value=todayStr();
@@ -357,6 +415,30 @@ function renderPlan(ctx){
   $('#order tbody').innerHTML=ord.map((d,i)=>`<tr><td>${i+1}</td><td>${esc(d.name)} <span class="tag">${num(d.apr)}%</span></td><td>${cur_.payoff[d.id]?mfmt(addMonths(cur_.payoff[d.id])):'-'}</td></tr>`).join('');
 }
 
+function renderCash(ctx){
+  $('#cashTable tbody').innerHTML=S.cash.map(i=>`<tr data-id="${i.id}">
+    <td><input data-f="name" value="${esc(i.name)}" style="min-width:120px"></td>
+    <td><select data-f="kind">${Object.entries(KINDS).map(([k,v])=>`<option value="${k}"${k===i.kind?' selected':''}>${v}</option>`).join('')}</select></td>
+    <td><input class="n" type="number" min="0" step="any" data-f="amount" value="${i.amount}" style="min-width:100px"></td>
+    <td><select data-f="freq">${Object.entries(FREQ).map(([k,v])=>`<option value="${k}"${k===i.freq?' selected':''}>${v}</option>`).join('')}</select></td>
+    <td class="n ${i.kind==='income'?'good':''}">${fmt(mAmt(i))}</td>
+    <td><button class="x" data-cdel="${i.id}" title="ลบ">✕</button></td></tr>`).join('')||'<tr><td colspan="6" class="muted">ยังไม่มีรายการ — เช่น เงินเดือน, ค่าเช่า, ค่าอาหาร, ค่าเดินทาง</td></tr>';
+  $('#cashOnHand').value=S.cashOnHand||'';
+  const p=lifePlan(ctx.cur),box=$('#lifePlan');
+  if(!p){box.innerHTML='<p class="muted">ใส่รายรับอย่างน้อย 1 รายการ แล้วระบบจะคำนวณแผนใช้ชีวิตให้</p>';return}
+  const c=p.cf,r=(n,a,b)=>`<tr><td>${n}</td><td class="n">${a}</td><td class="n">${b}</td></tr>`;
+  const sc=(s)=>!s?'-':s.ok?`${dur(s.months)} (${mfmt(addMonths(s.months))})`:'ไม่หมด';
+  box.innerHTML=`<div class="scroll"><table><thead><tr><th>ต่อเดือน</th><th class="n">ตามที่กรอก</th><th class="n">แผนแนะนำ</th></tr></thead><tbody>
+    ${r('รายรับ',money(c.income),money(c.income))}
+    ${r('รายจ่ายจำเป็น',`${money(c.need)} (${(c.need/c.income*100).toFixed(0)}%)`,money(c.need))}
+    ${r('รายจ่ายตามใจ',`${money(c.want)} (${(c.want/c.income*100).toFixed(0)}%)`,`${money(p.wantRec)} (${(p.wantRec/c.income*100).toFixed(0)}%)`)}
+    ${r('ออม/ลงทุน',money(c.save),money(p.saveRec))}
+    ${r('<b>จ่ายหนี้ได้</b>',`<b>${money(p.budNow)}</b>`,`<b>${money(p.budRec)}</b>`)}
+    ${p.hasDebt?r('หมดหนี้ใน',sc(p.simNow),sc(p.simRec))+r('ดอกเบี้ยรวม',p.simNow&&p.simNow.ok?money(p.simNow.interest):'-',p.simRec&&p.simRec.ok?money(p.simRec.interest):'-'):''}
+    </tbody></table></div>
+    ${p.hasDebt?`<div class="row" style="margin:10px 0"><button data-usebud="${Math.round(p.budNow)}">ใช้งบ ${money(p.budNow)}</button><button class="pri" data-usebud="${Math.round(p.budRec)}">ใช้งบแนะนำ ${money(p.budRec)} เป็นงบจ่ายหนี้</button></div>`:''}
+    <div class="advice">${p.tips.map(i=>`<div class="${i.k}">${esc(i.t)}${i.s?`<small>${esc(i.s)}</small>`:''}</div>`).join('')}</div>`;
+}
 function renderAdvice(){
   const a=S.lastAdvice;
   if(!a){$('#advice').innerHTML='<div class="muted">บันทึกการจ่ายแล้วคำแนะนำจะขึ้นที่นี่</div>';$('#adviceWhen').textContent='';return}
@@ -412,7 +494,17 @@ $('#debtTable').addEventListener('change',e=>{
   d[f]=['balance','apr','min'].includes(f)?num(e.target.value):e.target.value;
   save();render();
 });
+function refreshAdvice(){S.lastAdvice={date:todayStr(),items:analyse(compute())};save();render()}
+$('#addCash').onclick=()=>{S.cash.push({id:uid(),name:S.cash.length?'รายการใหม่':'เงินเดือน',kind:S.cash.length?'need':'income',amount:0,freq:'month'});save();render();const i=$('#cashTable tbody tr:last-child input[data-f=name]');i&&(i.focus(),i.select())};
+$('#cashTable').addEventListener('change',e=>{
+  const f=e.target.dataset.f;if(!f)return;
+  const i=S.cash.find(x=>x.id===e.target.closest('tr').dataset.id);if(!i)return;
+  i[f]=f==='amount'?num(e.target.value):e.target.value;refreshAdvice();
+});
+$('#cashOnHand').addEventListener('change',e=>{S.cashOnHand=num(e.target.value);refreshAdvice()});
 document.addEventListener('click',e=>{
+  if(e.target.dataset.cdel){S.cash=S.cash.filter(x=>x.id!==e.target.dataset.cdel);refreshAdvice();return}
+  if(e.target.dataset.usebud){S.budget=num(e.target.dataset.usebud);refreshAdvice();toast('ตั้งงบจ่ายหนี้แล้ว');return}
   const del=e.target.dataset.del,dl=e.target.dataset.dl;
   if(del){const d=S.debts.find(x=>x.id===del);if(confirm(`ลบ "${d.name}" และบันทึกทั้งหมดของหนี้นี้?`)){S.debts=S.debts.filter(x=>x.id!==del);S.logs=S.logs.filter(l=>l.debtId!==del);save();render()}}
   if(dl){S.logs=S.logs.filter(l=>l.id!==dl);save();render();toast('ลบรายการแล้ว')}
@@ -442,7 +534,7 @@ $('#sample').onclick=()=>{
   const a={id:uid(),name:'บัตรเครดิต A',type:'บัตรเครดิต',balance:60000,apr:18,min:3000,start:mk(3)};
   const b={id:uid(),name:'สินเชื่อส่วนบุคคล',type:'สินเชื่อส่วนบุคคล',balance:150000,apr:25,min:5500,start:mk(3)};
   const c={id:uid(),name:'ผ่อนมือถือ',type:'ผ่อนสินค้า',balance:20000,apr:10,min:2000,start:mk(3)};
-  S={debts:[a,b,c],budget:16000,strategy:'avalanche',lastAdvice:null,logs:[
+  S={debts:[a,b,c],cash:[{id:uid(),name:'เงินเดือน',kind:'income',amount:45000,freq:'month'},{id:uid(),name:'ค่าเช่า/ที่พัก',kind:'need',amount:9000,freq:'month'},{id:uid(),name:'ค่าอาหาร',kind:'need',amount:7000,freq:'month'},{id:uid(),name:'ค่าเดินทาง+เน็ต+โทร',kind:'need',amount:4000,freq:'month'},{id:uid(),name:'ท่องเที่ยว/ช้อป/กินนอกบ้าน',kind:'want',amount:10000,freq:'month'}],cashOnHand:20000,budget:16000,strategy:'avalanche',lastAdvice:null,logs:[
     {id:uid(),date:mk(2),debtId:a.id,pay:3000,borrow:0,note:''},{id:uid(),date:mk(2),debtId:b.id,pay:5500,borrow:0,note:''},{id:uid(),date:mk(2),debtId:c.id,pay:2000,borrow:0,note:''},
     {id:uid(),date:mk(1),debtId:a.id,pay:3000,borrow:2000,note:'รูดซื้อของ'},{id:uid(),date:mk(1),debtId:b.id,pay:7000,borrow:0,note:''},{id:uid(),date:mk(1),debtId:c.id,pay:2000,borrow:0,note:''}]};
   const ctx=compute();const last=ctx.rows.find(r=>r.debtId===b.id);
@@ -458,10 +550,10 @@ $('#expCsv').onclick=()=>{
 function dl(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 $('#imp').onchange=e=>{
   const f=e.target.files[0];if(!f)return;
-  f.text().then(t=>{try{const s=JSON.parse(t);if(!Array.isArray(s.debts)||!Array.isArray(s.logs))throw 0;S={budget:0,strategy:'avalanche',lastAdvice:null,...s};save();render();toast('นำเข้าแล้ว')}catch(_){toast('ไฟล์ไม่ถูกต้อง')}});
+  f.text().then(t=>{try{const s=JSON.parse(t);if(!Array.isArray(s.debts)||!Array.isArray(s.logs))throw 0;S={budget:0,strategy:'avalanche',lastAdvice:null,cash:[],cashOnHand:0,...s};save();render();toast('นำเข้าแล้ว')}catch(_){toast('ไฟล์ไม่ถูกต้อง')}});
   e.target.value='';
 };
-$('#reset').onclick=()=>{if(confirm('ล้างข้อมูลทั้งหมด?')){S={debts:[],logs:[],budget:0,strategy:'avalanche',lastAdvice:null};save();render()}};
+$('#reset').onclick=()=>{if(confirm('ล้างข้อมูลทั้งหมด?')){S={debts:[],logs:[],cash:[],cashOnHand:0,budget:0,strategy:'avalanche',lastAdvice:null};save();render()}};
 matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',render);
 render();
 </script>
