@@ -428,10 +428,26 @@ function refText(m){var a=m.nr[0],b=m.nr[1];return a==null?'≤ '+b:b==null?'≥
 function distOut(m,v){var a=m.nr[0],b=m.nr[1],span=(m.ax[1]-m.ax[0]);if(a!=null&&v<a)return (a-v)/span;if(b!=null&&v>b)return (v-b)/span;return 0}
 
 /* ---------- state ---------- */
-var recs=DEMO.slice(), mode='demo', col=null, selected='fbs', filter='all', assets=null, sample=null, canImg=false;
+var raw=[], recs=DEMO.slice(), mode='demo', col=null, selected='fbs', filter='all', assets=null, sample=null, canImg=false;
 var profile={age:'',sex:''};
 try{var p=JSON.parse(localStorage.getItem('hd_profile')||'{}');profile.age=p.age||'';profile.sex=p.sex||''}catch(e){}
 
+// several saved docs can share one exam date: show them as one checkup (newest edit wins per value)
+function mergeByDate(list){
+  var by={},out=[];
+  list.slice().sort(function(a,b){return (a.createdAt||0)-(b.createdAt||0)}).forEach(function(r){
+    if(!r.date)return;
+    var m=by[r.date];
+    if(!m){m=by[r.date]={id:r.id,ids:[],date:r.date,values:{},imageIds:[],note:r.note||'',createdAt:r.createdAt};out.push(m)}
+    m.ids.push(r.id);Object.assign(m.values,r.values||{});
+    (r.imageIds||[]).forEach(function(x){if(m.imageIds.indexOf(x)<0)m.imageIds.push(x)});
+  });
+  out.forEach(function(m){m.pending=!Object.keys(m.values).length});
+  return out;
+}
+function setRaw(list){raw=list;recs=mergeByDate(list);refresh()}
+function applySnap(snap){setRaw(snap.docs.map(function(d){var o=d.data()||{};o.id=d.id;return o}).filter(function(r){return r.date&&r.values}))}
+async function refetch(){if(mode==='db'&&col){try{applySnap(await col.get())}catch(e){}}}
 function hasVals(r){return r&&r.values&&Object.keys(r.values).length>0}
 function sorted(){return recs.slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0})}
 function series(k){return sorted().filter(function(r){return r.values&&r.values[k]!=null}).map(function(r){return {t:+new Date(r.date+'T00:00:00'),date:r.date,v:+r.values[k],r:r}})}
@@ -611,10 +627,24 @@ function renderHist(){
 async function delRec(id){
   if(confirmDel!==id){confirmDel=id;renderHist();return}
   confirmDel=null;
-  if(mode==='db'&&col){try{await col.doc(id).delete()}catch(e){}}
-  else{recs=recs.filter(function(r){return r.id!==id});saveLocal();refresh()}
+  var r=recs.filter(function(x){return x.id===id})[0];if(!r)return;
+  var ids=r.ids||[r.id];
+  if(mode==='db'&&col){for(var i=0;i<ids.length;i++){try{await col.doc(ids[i]).delete()}catch(e){}}await refetch()}
+  else{setRaw(raw.filter(function(x){return ids.indexOf(x.id)<0}));saveLocal()}
 }
-function saveLocal(){try{localStorage.setItem('hd_recs',JSON.stringify(recs.map(function(r){return {id:r.id,date:r.date,values:r.values,note:r.note,imageIds:r.imageIds||[]}})))}catch(e){}}
+// write a merged checkup back as one document and remove its duplicates
+async function writeMerged(r,vals,imgs){
+  var ids=r.ids||[r.id],others=ids.filter(function(x){return x!==r.id});
+  if(mode==='db'&&col){
+    await col.doc(r.id).update({values:vals,imageIds:imgs,pending:!Object.keys(vals).length});
+    for(var i=0;i<others.length;i++){try{await col.doc(others[i]).delete()}catch(e){}}
+  }else{
+    var keep=raw.filter(function(x){return others.indexOf(x.id)<0});
+    keep.forEach(function(x){if(x.id===r.id){x.values=vals;x.imageIds=imgs;x.pending=!Object.keys(vals).length}});
+    raw=keep;saveLocal();setRaw(raw);
+  }
+}
+function saveLocal(){try{localStorage.setItem('hd_recs',JSON.stringify(raw.map(function(r){return {id:r.id,date:r.date,values:r.values,note:r.note,imageIds:r.imageIds||[],createdAt:r.createdAt}})))}catch(e){}}
 
 /* ---------- add panel ---------- */
 // gs = groups of results by exam date, each {date, values, auto (keys read from image), files}
@@ -713,7 +743,7 @@ function upNote(n){
 }
 async function persist(rec){
   if(mode==='db'&&col){var ref=await col.add(rec);return ref.id}
-  rec.id='l-'+Date.now()+'-'+Math.floor(Math.random()*1e4);recs=recs.filter(function(r){return !r.demo}).concat([rec]);mode='local';saveLocal();return rec.id;
+  rec.id='l-'+Date.now()+'-'+Math.floor(Math.random()*1e4);raw=raw.concat([rec]);mode='local';saveLocal();setRaw(raw);return rec.id;
 }
 async function saveAll(){
   if(reading){$('saveMsg').textContent='รออ่านภาพให้เสร็จก่อน';return}
@@ -728,13 +758,12 @@ async function saveAll(){
       if(!firstKey)firstKey=Object.keys(g.values)[0];
       var ex=existing(date);
       if(ex){
-        var vals=Object.assign({},ex.values||{},g.values),im=(ex.imageIds||[]).concat(ids);
-        if(mode==='db'&&col)await col.doc(ex.id).update({values:vals,imageIds:im,pending:!Object.keys(vals).length});
-        else{ex.values=vals;ex.imageIds=im;ex.pending=!Object.keys(vals).length;saveLocal()}
+        await writeMerged(ex,Object.assign({},ex.values||{},g.values),(ex.imageIds||[]).concat(ids));
       }else{
         await persist({date:date,values:g.values,note:'',imageIds:ids,createdAt:Date.now()+i,pending:!Object.keys(g.values).length});
       }
     }
+    await refetch();
     $('addOv').hidden=true;$('saveMsg').textContent='';
     if(firstKey)selected=firstKey;
     refresh();upNote(upOk);
@@ -925,8 +954,7 @@ async function delImage(recId,imgId){
   var r=recs.filter(function(x){return x.id===recId})[0];if(!r)return;
   var ids=(r.imageIds||[]).filter(function(x){return x!==imgId});
   try{
-    if(mode==='db'&&col){await col.doc(recId).update({imageIds:ids})}
-    else{r.imageIds=ids;saveLocal();refresh()}
+    await writeMerged(r,r.values||{},ids);await refetch();
     if(assets){try{await assets.delete(imgId)}catch(e){}}
     msg.textContent='ลบภาพแล้ว';
   }catch(e){msg.textContent='ลบภาพไม่สำเร็จ ลองใหม่อีกครั้ง'}
@@ -991,15 +1019,13 @@ refresh();
     if(db&&user&&user.id){
       var uid=await user.id();
       col=db.collection('data/users/'+uid+'/checkups/items');mode='db';$('syncNote').textContent='บันทึกไว้ในบัญชีของคุณ เปิดดูได้ทุกเครื่องที่ล็อกอินบัญชีเดียวกัน';
-      col.onSnapshot(function(snap){
-        recs=snap.docs.map(function(d){var o=d.data()||{};o.id=d.id;return o}).filter(function(r){return r.date&&r.values});
-        refresh();
-      },function(){mode='local'});
+      try{applySnap(await col.get())}catch(e){$('syncNote').textContent='โหลดข้อมูลจากบัญชีไม่สำเร็จ ('+((e&&e.code)||'error')+') ลองรีเฟรชหน้า'}
+      col.onSnapshot(applySnap,function(e){$('syncNote').textContent='บันทึกไว้ในบัญชีของคุณ (อัปเดตอัตโนมัติไม่ได้ หน้าจะโหลดข้อมูลใหม่หลังบันทึกทุกครั้ง)'});
       return;
     }
   }catch(e){}
   $('syncNote').textContent='ข้อมูลบันทึกในเบราว์เซอร์เครื่องนี้เท่านั้น ล็อกอินเพื่อใช้ข้ามเครื่อง';
-  try{var saved=JSON.parse(localStorage.getItem('hd_recs')||'null');if(saved&&saved.length){recs=saved;mode='local';refresh()}}catch(e){}
+  try{var saved=JSON.parse(localStorage.getItem('hd_recs')||'null');if(saved&&saved.length){mode='local';setRaw(saved)}}catch(e){}
   if(!sample)$('runAll').disabled=true;
 })();
 refreshAiButtons();
