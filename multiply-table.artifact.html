@@ -85,6 +85,8 @@ tfoot td{background:var(--grn2);font-weight:700}
     <thead id="ghead"></thead>
     <tbody id="grp"></tbody>
   </table></div>
+  <div class="sub3" style="margin:12px 0 6px;font-size:12px;color:var(--tx2)">น้ำหนักรวมตามสินค้า</div>
+  <div class="scroll"><table><thead><tr><th>ชื่อสินค้า</th><th>จำนวนแถว</th><th>น้ำหนักรวม (กรัม)</th><th>เป็น กก.</th></tr></thead><tbody id="wprod"></tbody></table></div>
 </div>
 <div id="pdfbox"></div>
 </div>
@@ -118,6 +120,12 @@ const eff=(r,c)=>{const v=r.m[c.id];return (v!==undefined&&v!==null&&v!=="")?v:(
 const result=r=>cols.reduce((a,c)=>OPS[c.op].f(a,eff(r,c)),r.q);
 const expr=(rowNo)=>cols.reduce((e,c,i)=>OPS[c.op].x(e,L(4+i)+rowNo),"C"+rowNo);
 // rows marked done are hidden and left out of totals and downloads unless "show done" is on
+// weight / volume units are converted to grams / millilitres so mixed units can be totalled
+const WU=[[/^(กรัม|ก\.|g|gram|grams)$/i,1],[/^(กก\.|กิโลกรัม|กิโล|kg)$/i,1000],[/^ขีด$/,100],[/^(มก\.|มิลลิกรัม|mg)$/i,0.001]];
+const VU=[[/^(มล\.|มิลลิลิตร|ml|cc)$/i,1],[/^(ลิตร|ล\.|l|liter)$/i,1000]];
+const fac=(u,t)=>{u=(u||"").trim();const m=t.find(x=>x[0].test(u));return m?m[1]:null};
+const grams=r=>{const f=fac(r.u,WU);return f==null?null:result(r)*f};
+const mls=r=>{const f=fac(r.u,VU);return f==null?null:result(r)*f};
 const NOP="(ไม่ระบุสินค้า)";
 let fprod="";
 const vis=()=>rows.filter(r=>(showDone||!r.done)&&(!fprod||(r.p||NOP)===fprod));
@@ -167,7 +175,13 @@ function refresh(){
   $("undoBtn").hidden=!selDone;$("undoBtn").disabled=!selDone;
   const units=new Set(c.map(r=>r.u.trim())),tot=c.reduce((a,r)=>a+result(r),0);
   const rc=L(4+cols.length);
-  $("foot").innerHTML=rows.length?`<tr><td></td><td colspan="${4+Math.max(cols.length,1)}">รวมผลลัพธ์ ${c.length} แถว${units.size>1?" (หน่วยต่างกัน ดูตารางรวมด้านล่าง)":""}</td><td class="n">${units.size>1?"-":fq(tot)}${fx&&units.size<=1?`<span class="fx">=SUM(${rc}2:${rc}${c.length+1})</span>`:""}</td><td></td></tr>`:"";
+  const wg=c.reduce((a,r)=>a+(grams(r)||0),0),wl=c.reduce((a,r)=>a+(mls(r)||0),0);
+  const other=c.filter(r=>grams(r)==null&&mls(r)==null);
+  const wtxt=wg?`${fq(wg)} กรัม = ${fq(wg/1000)} กก.`:"-",wcols=4+Math.max(cols.length,1);
+  const wrow=`<tr><td></td><td colspan="${wcols}">รวมน้ำหนัก (แปลง กรัม/กก./ขีด/มก. ให้อัตโนมัติ)${other.length?` · ไม่นับ ${other.length} แถวที่หน่วยไม่ใช่น้ำหนัก: ${esc([...new Set(other.map(r=>(r.n||"-")+" ("+(r.u||"ไม่มีหน่วย")+")"))].join(", "))}`:""}</td><td class="n f" id="wtot">${wtxt}${fx&&wg?`<span class="fx">=SUM(น้ำหนักกรัม) ÷ 1000</span>`:""}</td><td></td></tr>`;
+  const vrow=wl?`<tr><td></td><td colspan="${wcols}">รวมปริมาตร (มล./ลิตร)</td><td class="n f">${fq(wl)} มล. = ${fq(wl/1000)} ลิตร</td><td></td></tr>`:"";
+  $("foot").innerHTML=rows.length?`<tr><td></td><td colspan="${4+Math.max(cols.length,1)}">รวมผลลัพธ์ ${c.length} แถว${units.size>1?" (หน่วยต่างกัน ดูตารางรวมด้านล่าง)":""}</td><td class="n">${units.size>1?"-":fq(tot)}${fx&&units.size<=1?`<span class="fx">=SUM(${rc}2:${rc}${c.length+1})</span>`:""}</td><td></td></tr>${wrow}${vrow}`:"";
+  $("wprod").innerHTML=c.length?weightByProduct(c).map(x=>`<tr><td>${esc(x.p)}</td><td class="n">${x.c}</td><td class="n f">${x.g?fq(x.g):"-"}</td><td class="n">${x.g?fq(x.g/1000):"-"}</td></tr>`).join(""):`<tr><td colspan="4" class="empty">—</td></tr>`;
   const byProd=$("gmode").value==="prod";
   const g=groupRows(c,byProd);
   $("ghead").innerHTML=`<tr>${byProd?"<th>ชื่อสินค้า</th>":""}<th>ชื่อวัตถุดิบ</th><th>หน่วย</th><th>จำนวนแถว</th><th>ผลลัพธ์รวม</th></tr>`;
@@ -179,6 +193,7 @@ function groupRows(c,byProd){
   return [...g.values()];
 }
 $("gmode").onchange=refresh;
+function weightByProduct(c){const m=new Map();c.forEach(r=>{const p=r.p||NOP,x=m.get(p)||{p,c:0,g:0};x.c++;x.g+=grams(r)||0;m.set(p,x)});return [...m.values()]}
 $("fx").onchange=refresh;
 
 const num=v=>{const x=parseFloat(v);return isNaN(x)?undefined:x};
@@ -234,14 +249,19 @@ const stamp=()=>new Date().toISOString().slice(0,10);
 $("xls").onclick=()=>{
   const c=chosen();if(!c.length){note("ยังไม่มีรายการ",false);return}
   const ws={},rc=L(4+cols.length);
-  ["ชื่อสินค้า","ชื่อวัตถุดิบ","ปริมาณ","หน่วย",...cols.map(x=>`${x.n} (${OPS[x.op].l})`),"ผลลัพธ์"].forEach((h,k)=>ws[L(k)+"1"]={t:"s",v:h});
+  ["ชื่อสินค้า","ชื่อวัตถุดิบ","ปริมาณ","หน่วย",...cols.map(x=>`${x.n} (${OPS[x.op].l})`),"ผลลัพธ์","น้ำหนัก (กรัม)"].forEach((h,k)=>ws[L(k)+"1"]={t:"s",v:h});
+  const wc=L(5+cols.length);
   c.forEach((r,k)=>{const q=k+2;
     ws["A"+q]={t:"s",v:r.p||NOP};ws["B"+q]={t:"s",v:r.n};ws["C"+q]={t:"n",v:r.q};ws["D"+q]={t:"s",v:r.u};
     cols.forEach((x,i)=>ws[L(4+i)+q]={t:"n",v:eff(r,x)});
-    ws[rc+q]={t:"n",v:result(r),f:expr(q)}});
+    ws[rc+q]={t:"n",v:result(r),f:expr(q)};
+    const wf=fac(r.u,WU);if(wf!=null)ws[wc+q]={t:"n",v:result(r)*wf,f:`${rc}${q}*${wf}`}});
   const last=c.length+1,tr=last+1;
   ws["A"+tr]={t:"s",v:"รวมผลลัพธ์"};ws[rc+tr]={t:"n",v:c.reduce((a,r)=>a+result(r),0),f:`SUM(${rc}2:${rc}${last})`};
-  ws["!ref"]=`A1:${rc}${tr}`;ws["!cols"]=[{wch:22},{wch:26},{wch:12},{wch:10},...cols.map(()=>({wch:16})),{wch:16}];
+  const wsum=c.reduce((a,r)=>a+(grams(r)||0),0);
+  ws["A"+(tr+1)]={t:"s",v:"รวมน้ำหนัก (กรัม)"};ws[wc+(tr+1)]={t:"n",v:wsum,f:`SUM(${wc}2:${wc}${last})`};
+  ws["A"+(tr+2)]={t:"s",v:"รวมน้ำหนัก (กก.)"};ws[wc+(tr+2)]={t:"n",v:wsum/1000,f:`${wc}${tr+1}/1000`};
+  ws["!ref"]=`A1:${wc}${tr+2}`;ws["!cols"]=[{wch:22},{wch:26},{wch:12},{wch:10},...cols.map(()=>({wch:16})),{wch:16},{wch:16}];
   const P=`คำนวณ!$A$2:$A$${last}`,N=`คำนวณ!$B$2:$B$${last}`,U=`คำนวณ!$D$2:$D$${last}`,R=`คำนวณ!$${rc}$2:$${rc}$${last}`;
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"คำนวณ");
   [["รวมตามวัตถุดิบ",false],["แยกตามสินค้า",true]].forEach(([title,bp])=>{
@@ -264,7 +284,9 @@ $("pdf").onclick=async()=>{
   const units=new Set(c.map(r=>r.u.trim())),tot=c.reduce((a,r)=>a+result(r),0);
   $("pdfbox").innerHTML=`<h2>ตารางคำนวณวัตถุดิบ ${new Date().toLocaleDateString("th-TH")}</h2>
   <table><thead><tr><th>#</th><th>ชื่อสินค้า</th><th>ชื่อวัตถุดิบ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(x=>`<th>${esc(x.n)}<br><small>${OPS[x.op].l}</small></th>`).join("")}<th>ผลลัพธ์</th></tr></thead><tbody>${body}</tbody>
-  <tfoot><tr><td colspan="${5+cols.length}">รวม</td><td class="n">${units.size>1?"-":fq(tot)}</td></tr></tfoot></table>`;
+  <tfoot><tr><td colspan="${5+cols.length}">รวม</td><td class="n">${units.size>1?"-":fq(tot)}</td></tr></tfoot></table>
+  <h2 style="margin-top:18px">รวมน้ำหนัก: ${(()=>{const g=c.reduce((a,r)=>a+(grams(r)||0),0);return g?`${fq(g)} กรัม (${fq(g/1000)} กก.)`:"-"})()}</h2>
+  <table><thead><tr><th>ชื่อสินค้า</th><th>จำนวนแถว</th><th>น้ำหนักรวม (กรัม)</th><th>กก.</th></tr></thead><tbody>${weightByProduct(c).map(x=>`<tr><td>${esc(x.p)}</td><td class="n">${x.c}</td><td class="n f">${x.g?fq(x.g):"-"}</td><td class="n">${x.g?fq(x.g/1000):"-"}</td></tr>`).join("")}</tbody></table>`;
   try{
     await (document.fonts&&document.fonts.ready);
     const cv=await html2canvas($("pdfbox"),{scale:2,backgroundColor:"#ffffff"});
