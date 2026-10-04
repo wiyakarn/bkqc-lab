@@ -93,10 +93,16 @@ tfoot td{background:var(--grn2);font-weight:700}
   <div class="bar">
     <div style="min-width:180px;flex:1"><label for="curP">เพิ่มสูตรให้สินค้า</label><select id="curP" style="width:100%;padding:6px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"></select></div>
     <div style="flex:2;min-width:220px"><label>เลือกสูตรที่จะแสดง / ส่งออก (เลือกได้หลายสูตร)</label><div class="modes" id="pchips" style="margin:2px 0 0"></div></div>
+    <button id="hidBtn">👁 รายการที่ซ่อนไว้ <b id="hidN">(0)</b></button>
     <button id="histBtn">🕘 ประวัติ / กู้คืน</button>
     <button class="d" id="cleanBtn">🧹 ลบข้อมูลที่ไม่ใช้</button>
     <button class="d" id="clearAll">ล้างทั้งหมด</button>
     <button id="undoDel" hidden>↶ เลิกทำการลบ</button>
+  </div>
+  <div class="msg" id="hid" hidden style="display:block">
+    <div style="font-weight:600;margin-bottom:4px">รายการที่ซ่อนไว้ (กด "ซ่อน (เสร็จ)" ที่แถวเพื่อซ่อน)</div>
+    <div class="scroll"><table><thead><tr><th>สูตร</th><th>วัตถุดิบ</th><th>ปริมาณ</th><th>ผลลัพธ์</th><th style="width:130px"></th></tr></thead><tbody id="hidRows"></tbody></table></div>
+    <div class="bar" style="margin:8px 0 0"><button id="hidAll">เรียกคืนทั้งหมด</button><button id="hidView">ดูในตารางหลัก</button><button id="hidX">ปิด</button></div>
   </div>
   <div class="msg" id="hist" hidden style="display:block">
     <div style="font-weight:600;margin-bottom:4px">ประวัติการบันทึก (เก็บสำเนาไว้ทุกครั้งที่ก่อนลบ ก่อนแทนที่ และทุก 5 นาที)</div>
@@ -357,7 +363,7 @@ function drawTable(){updProducts();
     <td><input type="text" data-f="u" data-r="${r.id}" value="${esc(r.u)}" style="min-width:60px" aria-label="หน่วย"></td>
     ${cols.map(c=>`<td><input type="number" data-m="${c.id}" data-r="${r.id}" value="${r.m[c.id]??""}" step="any" placeholder="${OPS[c.op].d}" aria-label="${esc(c.n)}"></td>`).join("")}
     <td class="n f" data-res="${r.id}"></td>
-    <td style="white-space:nowrap"><button class="dn" data-ins="${r.id}" aria-label="แทรกแถวใหม่ใต้แถวนี้">＋ แทรก</button> <button class="dn" data-done="${r.id}" aria-label="${r.done?"เรียกคืน":"เสร็จแล้ว"}">${r.done?"↩ เรียกคืน":"✓ เสร็จ"}</button> <button class="d x" data-rdel="${r.id}" aria-label="ลบรายการ">✕</button></td></tr>`).join("")+emptyRows
+    <td style="white-space:nowrap"><button class="dn" data-ins="${r.id}" aria-label="แทรกแถวใหม่ใต้แถวนี้">＋ แทรก</button> <button class="dn" data-done="${r.id}" aria-label="${r.done?"เรียกคืน":"เสร็จแล้ว"}">${r.done?"↩ เรียกคืน":"🙈 ซ่อน (เสร็จ)"}</button> <button class="d x" data-rdel="${r.id}" aria-label="ลบรายการ">✕</button></td></tr>`).join("")+emptyRows
     :`<tr><td colspan="${Math.max(cols.length,1)+6}" class="empty">${rows.length?"ทุกรายการเสร็จแล้ว (ซ่อนอยู่) ติ๊ก \"แสดงที่เสร็จแล้ว\" เพื่อดู":"ยังไม่มีรายการ กด \"+ เพิ่มรายการ\""}</td></tr>`;
   refresh();
 }
@@ -371,7 +377,7 @@ function refresh(){
   $("undoDel").hidden=!undoStack.length;
   sel.forEach(id=>{if(!V.some(r=>r.id===id))sel.delete(id)});
   $("cnt").textContent=(sel.size?`เลือก ${sel.size} จาก ${V.length} แถว`:`แสดง ${V.length} แถว`);
-  $("doneN").textContent=nd?`(${nd})`:"";$("showDone").checked=showDone;
+  $("doneN").textContent=nd?`(${nd})`:"";$("hidN").textContent=`(${nd})`;if(!$("hid").hidden)fillHid();$("showDone").checked=showDone;
   $("del").disabled=!sel.size;$("all").checked=V.length>0&&sel.size===V.length;
   const selDone=[...sel].some(id=>rows.find(r=>r.id===id)?.done);
   $("doneBtn").disabled=!sel.size;$("doneBtn").hidden=sel.size>0&&[...sel].every(id=>rows.find(r=>r.id===id)?.done);
@@ -480,6 +486,15 @@ $("impFile").onchange=e=>{
     note(`นำเข้าแล้ว: เพิ่มสูตร/แถวใหม่ ${addN} แถว (ข้อมูลเดิมไม่ถูกแทนที่)`,false)
   }catch(err){note("ไฟล์นี้ไม่ใช่ไฟล์สำรองของหน้านี้",false)}};
   rd.readAsText(f)};
+function fillHid(){
+  const h=rows.filter(r=>r.done);
+  $("hidRows").innerHTML=h.length?h.map(r=>`<tr><td>${esc(r.p||NOP)}</td><td>${esc(r.n)}</td><td class="n">${fq(r.q)} ${esc(r.u||"")}</td><td class="n f">${fq(result(r))} ${esc(r.u||"")}</td><td><button data-hrest="${r.id}">↩ เรียกคืน</button></td></tr>`).join(""):`<tr><td colspan="5" class="empty">ไม่มีรายการที่ซ่อนอยู่</td></tr>`;
+}
+$("hidBtn").onclick=()=>{$("hid").hidden=!$("hid").hidden;if(!$("hid").hidden)fillHid()};
+$("hidX").onclick=()=>{$("hid").hidden=true};
+$("hidAll").onclick=()=>{const ids=new Set(rows.filter(r=>r.done).map(r=>r.id));if(ids.size)setDone(ids,false);fillHid()};
+$("hidView").onclick=()=>{showDone=true;save();drawTable()};
+$("hidRows").addEventListener("click",e=>{const id=e.target.dataset.hrest;if(!id)return;setDone(new Set([+id]),false);fillHid()});
 function fillHist(){
   $("histRows").innerHTML=backups.length?backups.map((b,i)=>`<tr><td>${new Date(b.t).toLocaleString("th-TH")}</td><td>${esc(b.why)}</td><td>${esc((b.state.products||[]).map(x=>x.name).join(", ")||"—")}</td><td class="n">${(b.state.rows||[]).length}</td><td style="white-space:nowrap"><button data-hr="${i}">กู้คืน</button> <button data-hm="${i}">เพิ่มเข้า</button></td></tr>`).join(""):`<tr><td colspan="5" class="empty">ยังไม่มีประวัติ</td></tr>`;
 }
