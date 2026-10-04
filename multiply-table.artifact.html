@@ -56,7 +56,7 @@ tfoot td{background:var(--grn2);font-weight:700}
 <h1>ตารางคำนวณวัตถุดิบ</h1>
 <div class="sub">① พิมพ์ชื่อวัตถุดิบ ② ใส่ปริมาณ ③ เพิ่มขั้นคำนวณได้หลายขั้น เลือกฟังก์ชันของแต่ละขั้น (คูณ หาร บวก ลบ เพิ่ม/ลด % ปัดขึ้น) ④ ผลลัพธ์ออกอัตโนมัติ · ขั้นคำนวณทำเรียงจากซ้ายไปขวา · ช่อง "ค่าทุกแถว" ใช้กับทุกแถวที่เว้นว่าง · ข้อมูลเก็บในเบราว์เซอร์ของคุณ ข้อมูลที่เห็นตอนเปิดครั้งแรกเป็นตัวอย่าง</div>
 
-<div class="savest" id="saveSt" role="status"><i></i><span id="saveTx">บันทึกอัตโนมัติ</span></div>
+<div class="savest" id="saveSt" role="status"><i></i><span id="saveTx">บันทึกอัตโนมัติ</span><button id="saveNow" style="padding:3px 10px;font-size:12px;margin-left:6px">💾 บันทึกรายการ</button></div>
 <div class="msg" id="msg" hidden><span id="msgt"></span><button class="d" id="msgok" hidden>ตกลง</button><button id="msgno">ปิด</button></div>
 
 <div class="card" id="prodCard">
@@ -157,6 +157,7 @@ async function pushCloud(){
   catch(e){setSt("บันทึกในเบราว์เซอร์นี้แล้ว แต่ยังบันทึกขึ้นบัญชีไม่สำเร็จ · "+hhmm(),"warn")}
   cloudBusy=false;if(cloudDirty){cloudDirty=false;pushCloud()}
 }
+$("saveNow").onclick=async()=>{save();clearTimeout(cloudTimer);if(cloudDoc)await pushCloud();note("บันทึกรายการแล้ว · "+hhmm()+(cloudDoc?" (ขึ้นบัญชีของคุณด้วย)":" (ในเบราว์เซอร์นี้)"),false)};
 async function initCloud(){
   setSt("บันทึกอัตโนมัติในเบราว์เซอร์นี้");
   try{
@@ -180,9 +181,10 @@ const result=r=>cols.reduce((a,c)=>OPS[c.op].f(a,eff(r,c)),r.q);
 const expr=(rowNo)=>cols.reduce((e,c,i)=>OPS[c.op].x(e,L(4+i)+rowNo),"C"+rowNo);
 // rows marked done are hidden and left out of totals and downloads unless "show done" is on
 // weight / volume units are converted to grams / millilitres so mixed units can be totalled
-const WU=[[/^(กรัม|ก\.|g|gram|grams)$/i,1],[/^(กก\.|กิโลกรัม|กิโล|kg)$/i,1000],[/^ขีด$/,100],[/^(มก\.|มิลลิกรัม|mg)$/i,0.001]];
-const VU=[[/^(มล\.|มิลลิลิตร|ml|cc)$/i,1],[/^(ลิตร|ล\.|l|liter)$/i,1000]];
-const fac=(u,t)=>{u=(u||"").trim();const m=t.find(x=>x[0].test(u));return m?m[1]:null};
+// units are matched after lower-casing and dropping dots/spaces, so "gm", "G.", "Kg", "กก." all work
+const WU=[[/^(g|gm|gms|gr|grm|gram|grams|กรัม|ก|กรม)$/,1],[/^(kg|kgs|kilo|kilos|kilogram|kilograms|กก|กิโล|กิโลกรัม)$/,1000],[/^ขีด$/,100],[/^(mg|มก|มิลลิกรัม)$/,0.001],[/^(lb|lbs|ปอนด์)$/,453.592],[/^(oz|ออนซ์)$/,28.3495],[/^(ton|tons|mt|ตัน)$/,1000000]];
+const VU=[[/^(ml|mls|มล|มิลลิลิตร|cc)$/,1],[/^(l|lt|ltr|liter|litre|liters|litres|ลิตร|ล)$/,1000]];
+const fac=(u,t)=>{u=(u||"").trim().toLowerCase().replace(/[.\s]/g,"");const m=t.find(x=>x[0].test(u));return m?m[1]:null};
 const grams=r=>{const f=fac(r.u,WU);return f==null?null:result(r)*f};
 const mls=r=>{const f=fac(r.u,VU);return f==null?null:result(r)*f};
 let undoStack=[];
@@ -391,7 +393,7 @@ $("pdf").onclick=async()=>{
   $("pdfbox").innerHTML=`<h2>ตารางคำนวณวัตถุดิบ ${new Date().toLocaleDateString("th-TH")}</h2>
   <table><thead><tr><th>#</th><th>ชื่อสินค้า</th><th>ชื่อวัตถุดิบ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(x=>`<th>${esc(x.n)}<br><small>${OPS[x.op].l}</small></th>`).join("")}<th>ผลลัพธ์</th></tr></thead><tbody>${body}</tbody>
   <tfoot><tr><td colspan="${5+cols.length}">รวม</td><td class="n">${units.size>1?"-":fq(tot)}</td></tr></tfoot></table>
-  <h2 style="margin-top:18px">รวมน้ำหนัก: ${(()=>{const g=c.reduce((a,r)=>a+(grams(r)||0),0);return g?`${fq(g)} กรัม (${fq(g/1000)} กก.)`:"-"})()}</h2>
+  <h2 style="margin-top:18px">รวมน้ำหนัก: ${(()=>{const g=c.reduce((a,r)=>a+(grams(r)||0),0);return g?`${fq(g)} กรัม (${fq(g/1000)} กก.)`:"-"})()}</h2>${(()=>{const o=c.filter(r=>grams(r)==null&&mls(r)==null);return o.length?`<div style="font-size:11px;color:#555;margin-bottom:6px">ไม่นับ ${o.length} แถวที่หน่วยไม่ใช่น้ำหนัก: ${esc([...new Set(o.map(r=>(r.n||"-")+" ("+(r.u||"ไม่มีหน่วย")+")"))].join(", "))}</div>`:""})()}
   <table><thead><tr><th>ชื่อสินค้า</th><th>จำนวนแถว</th><th>น้ำหนักรวม (กรัม)</th><th>กก.</th></tr></thead><tbody>${weightByProduct(c).map(x=>`<tr><td>${esc(x.p)}</td><td class="n">${x.c}</td><td class="n f">${x.g?fq(x.g):"-"}</td><td class="n">${x.g?fq(x.g/1000):"-"}</td></tr>`).join("")}</tbody></table>`;
   try{
     await (document.fonts&&document.fonts.ready);
