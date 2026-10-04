@@ -42,6 +42,7 @@ tr.done td{opacity:.55}tr.done td input{text-decoration:line-through}
 tr.sel td{background:var(--amb2)}tr.sel td.f{background:var(--blu2)}
 tfoot td{background:var(--grn2);font-weight:700}
 .empty{text-align:center;color:var(--tx2);padding:16px}
+.savest{font-size:12px;color:var(--tx2);margin:-6px 0 12px;display:flex;gap:6px;align-items:center}.savest i{width:8px;height:8px;border-radius:50%;background:var(--grn);display:inline-block}.savest.warn i{background:var(--red)}.savest.busy i{background:var(--tx2)}
 .msg{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border-radius:8px;background:var(--amb2);border:1px solid var(--brd);margin-bottom:12px}
 .msg[hidden]{display:none}
 .msg span{flex:1;min-width:160px}
@@ -55,6 +56,7 @@ tfoot td{background:var(--grn2);font-weight:700}
 <h1>ตารางคำนวณวัตถุดิบ</h1>
 <div class="sub">① พิมพ์ชื่อวัตถุดิบ ② ใส่ปริมาณ ③ เพิ่มขั้นคำนวณได้หลายขั้น เลือกฟังก์ชันของแต่ละขั้น (คูณ หาร บวก ลบ เพิ่ม/ลด % ปัดขึ้น) ④ ผลลัพธ์ออกอัตโนมัติ · ขั้นคำนวณทำเรียงจากซ้ายไปขวา · ช่อง "ค่าทุกแถว" ใช้กับทุกแถวที่เว้นว่าง · ข้อมูลเก็บในเบราว์เซอร์ของคุณ ข้อมูลที่เห็นตอนเปิดครั้งแรกเป็นตัวอย่าง</div>
 
+<div class="savest" id="saveSt" role="status"><i></i><span id="saveTx">บันทึกอัตโนมัติ</span></div>
 <div class="msg" id="msg" hidden><span id="msgt"></span><button class="d" id="msgok" hidden>ตกลง</button><button id="msgno">ปิด</button></div>
 
 <div class="card">
@@ -109,12 +111,44 @@ const OPS={
  up:{l:"ปัดขึ้น (ทศนิยม)",d:0,f:(a,v)=>{const m=Math.pow(10,v);return Math.ceil(a*m-1e-9)/m},x:(e,c)=>`ROUNDUP(${e},${c})`}
 };
 let cols=[],rows=[],sel=new Set(),pending=null,showDone=false;
-try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s){cols=s.cols||[];rows=s.rows||[];showDone=!!s.showDone}}catch(e){}
+let updated=0;
+try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s){cols=s.cols||[];rows=s.rows||[];showDone=!!s.showDone;updated=s.updated||0}}catch(e){}
 if(!cols.length){
   cols=[{id:"c1",op:"mul",n:"จำนวนที่ผลิต",d:200},{id:"c2",op:"inc",n:"เผื่อสูญเสีย %",d:5},{id:"c3",op:"up",n:"ปัดเศษขึ้น",d:0}];
   rows=[{id:1,p:"ข้าวผัดหมู",n:"ข้าวสวย",q:200,u:"กรัม",m:{}},{id:2,p:"ข้าวผัดหมู",n:"หมูสับ",q:60,u:"กรัม",m:{}},{id:3,p:"ข้าวผัดหมู",n:"ไข่ไก่",q:0.5,u:"ฟอง",m:{c2:0}},{id:4,p:"กะเพราหมูสับ",n:"หมูสับ",q:80,u:"กรัม",m:{}},{id:5,p:"กะเพราหมูสับ",n:"ข้าวสวย",q:200,u:"กรัม",m:{}}];
 }
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({cols,rows,showDone}))}catch(e){}};
+// autosave: every change is written to this browser at once, and (when signed in) to the viewer's private account storage after a short pause
+let cloudDoc=null,cloudBusy=false,cloudDirty=false,cloudTimer=null;
+const hhmm=()=>new Date().toLocaleTimeString("th-TH");
+function setSt(txt,cls){$("saveSt").className="savest "+(cls||"");$("saveTx").textContent=txt}
+const stateNow=()=>({cols,rows,showDone});
+function save(){
+  updated=Date.now();
+  try{localStorage.setItem(KEY,JSON.stringify({...stateNow(),updated}))}catch(e){setSt("บันทึกในเบราว์เซอร์ไม่ได้ ข้อมูลอาจหายเมื่อปิดหน้า","warn");return}
+  if(cloudDoc){setSt("กำลังบันทึก…","busy");clearTimeout(cloudTimer);cloudTimer=setTimeout(pushCloud,800)}
+  else setSt("บันทึกอัตโนมัติในเบราว์เซอร์นี้แล้ว · "+hhmm());
+}
+async function pushCloud(){
+  if(!cloudDoc)return;if(cloudBusy){cloudDirty=true;return}
+  cloudBusy=true;
+  try{await cloudDoc.set({state:JSON.stringify(stateNow()),updated});setSt("บันทึกอัตโนมัติแล้ว (บัญชีของคุณ ใช้ต่อได้ทุกเครื่อง) · "+hhmm())}
+  catch(e){setSt("บันทึกในเบราว์เซอร์นี้แล้ว แต่ยังบันทึกขึ้นบัญชีไม่สำเร็จ · "+hhmm(),"warn")}
+  cloudBusy=false;if(cloudDirty){cloudDirty=false;pushCloud()}
+}
+async function initCloud(){
+  setSt("บันทึกอัตโนมัติในเบราว์เซอร์นี้");
+  try{
+    const user=await claude.use("user"),db=await claude.use("db");if(!user||!db)return;
+    const id=await user.id();if(!id)return;
+    cloudDoc=db.doc("data/users/"+id+"/calc");
+    const snap=await cloudDoc.get(),d=snap.exists?snap.data():null;
+    if(d&&d.updated>updated){
+      const st=JSON.parse(d.state);cols=st.cols||[];rows=st.rows||[];showDone=!!st.showDone;updated=d.updated;
+      try{localStorage.setItem(KEY,JSON.stringify({...stateNow(),updated}))}catch(e){}
+      drawTable();setSt("โหลดข้อมูลล่าสุดจากบัญชีของคุณแล้ว · "+hhmm());
+    }else await pushCloud();
+  }catch(e){cloudDoc=null;setSt("บันทึกอัตโนมัติในเบราว์เซอร์นี้ (ยังเชื่อมบัญชีไม่ได้)")}
+}
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fq=n=>isNaN(n)?"หารด้วย 0":n.toLocaleString("th-TH",{maximumFractionDigits:4});
 const L=n=>{let s="";n++;while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26)}return s};
@@ -314,4 +348,5 @@ $("pdf").onclick=async()=>{
   $("pdfbox").innerHTML="";
 };
 drawTable();
+initCloud();
 </script>
