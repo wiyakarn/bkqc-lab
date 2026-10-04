@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>ตารางคำนวณสูตรอัตโนมัติ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f4f3ef;--sur:#fff;--brd:#d0cec4;--tx:#1a1916;--tx2:#6b6860;--grn:#1d6f42;--grn2:#e8f3ed;--blu2:#e8f0fa;--red:#c0392b;--amb2:#fef8ec}
+*{box-sizing:border-box}
+body{margin:0;font-family:Sarabun,"Noto Sans Thai",sans-serif;background:var(--bg);color:var(--tx);font-size:14px;line-height:1.5}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 2px;color:var(--grn)}
+.sub{color:var(--tx2);font-size:12px;margin-bottom:12px}
+.card{background:var(--sur);border:1px solid var(--brd);border-radius:10px;padding:12px;margin-bottom:12px}
+.add{display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;align-items:end}
+label{font-size:11px;color:var(--tx2);display:block}
+input[type=text],input[type=number]{width:100%;padding:7px 8px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:#fffdf5}
+button{font:inherit;padding:7px 12px;border:1px solid var(--brd);border-radius:6px;background:#fff;cursor:pointer}
+button.p{background:var(--grn);color:#fff;border-color:var(--grn)}
+button.d{color:var(--red);border-color:var(--red)}
+button:disabled{opacity:.4;cursor:default}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+.bar .sp{flex:1}
+.cnt{font-size:12px;color:var(--tx2)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th{background:var(--grn);color:#fff;font-weight:600;padding:7px 8px;font-size:12px;white-space:nowrap}
+td{border:1px solid var(--brd);padding:5px 8px}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+td.f{background:var(--blu2)}
+.fx{display:block;font:11px/1.2 ui-monospace,Menlo,monospace;color:var(--tx2)}
+tr.sel td{background:var(--amb2)}tr.sel td.f{background:#dbe7f7}
+tfoot td{background:var(--grn2);font-weight:700}
+h2{font-size:15px;margin:0 0 8px}
+.empty{text-align:center;color:var(--tx2);padding:18px}
+.only-print{display:none}
+@media(max-width:700px){.add{grid-template-columns:1fr 1fr}.add>div:first-child{grid-column:1/-1}}
+@media print{
+  body{background:#fff}.wrap{max-width:none;padding:0}
+  .noprint,button,.add,.bar{display:none!important}
+  .only-print{display:block}
+  .card{border:none;padding:0}
+  th{background:#1d6f42!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  td.f,tfoot td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .hidecol{display:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>ตารางคำนวณสูตรอัตโนมัติ</h1>
+<div class="sub noprint">พิมพ์ชื่อสินค้า → ระบบคำนวณยอดให้ · ติ๊กเลือกหลายรายการเพื่อรวม / ลบ / ดาวน์โหลด · ข้อมูลเก็บในเบราว์เซอร์นี้</div>
+
+<div class="card add">
+  <div><label>ชื่อสินค้า</label><input type="text" id="n" list="names" placeholder="พิมพ์หรือเลือกชื่อสินค้า"><datalist id="names"></datalist></div>
+  <div><label>จำนวน</label><input type="number" id="q" min="0" step="any" value="1"></div>
+  <div><label>ราคา/หน่วย</label><input type="number" id="p" min="0" step="any" value="0"></div>
+  <div><label>ส่วนลด %</label><input type="number" id="d" min="0" max="100" step="any" value="0"></div>
+  <button class="p" id="addBtn">+ เพิ่ม</button>
+</div>
+
+<div class="card">
+  <div class="bar">
+    <label style="display:flex;gap:4px;align-items:center;font-size:13px;color:var(--tx)"><input type="checkbox" id="all"> เลือกทั้งหมด</label>
+    <span class="cnt" id="cnt"></span><span class="sp"></span>
+    <label style="display:flex;gap:4px;align-items:center;font-size:13px;color:var(--tx)"><input type="checkbox" id="fx" checked> แสดงสูตร</label>
+    <button class="d" id="del" disabled>ลบที่เลือก</button>
+    <button id="xls">⬇ Excel</button>
+    <button id="pdf">⬇ PDF</button>
+  </div>
+  <div class="only-print"><h2 id="ptitle">รายการสินค้า</h2></div>
+  <div class="scroll"><table>
+    <thead><tr><th class="hidecol" style="width:34px"></th><th>#</th><th>ชื่อสินค้า</th><th>จำนวน</th><th>ราคา/หน่วย</th><th>ส่วนลด %</th><th>รวม (คำนวณ)</th><th class="hidecol" style="width:50px"></th></tr></thead>
+    <tbody id="rows"></tbody>
+    <tfoot id="foot"></tfoot>
+  </table></div>
+</div>
+
+<div class="card" id="grpCard">
+  <h2>รวมตามชื่อสินค้า (เฉพาะรายการที่เลือก; ถ้าไม่เลือกจะรวมทั้งหมด)</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>ชื่อสินค้า</th><th>จำนวนรายการ</th><th>รวมจำนวน</th><th>รวมเป็นเงิน</th></tr></thead>
+    <tbody id="grp"></tbody><tfoot id="gfoot"></tfoot>
+  </table></div>
+</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const KEY="calcTable.v1";
+let items=[],sel=new Set();
+try{items=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(items))}catch(e){}};
+const fmt=n=>n.toLocaleString("th-TH",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtq=n=>n.toLocaleString("th-TH",{maximumFractionDigits:4});
+const total=i=>i.q*i.p*(1-i.d/100);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const chosen=()=>sel.size?items.filter(i=>sel.has(i.id)):items;
+
+function render(){
+  const showFx=$("fx").checked;
+  $("names").innerHTML=[...new Set(items.map(i=>i.n))].map(n=>`<option value="${esc(n)}">`).join("");
+  $("rows").innerHTML=items.length?items.map((it,k)=>{
+    const r=k+2;
+    return `<tr class="${sel.has(it.id)?"sel":""}">
+      <td class="hidecol"><input type="checkbox" data-id="${it.id}" ${sel.has(it.id)?"checked":""}></td>
+      <td>${k+1}</td><td>${esc(it.n)}</td>
+      <td class="n">${fmtq(it.q)}</td><td class="n">${fmt(it.p)}</td><td class="n">${fmtq(it.d)}</td>
+      <td class="n f">${fmt(total(it))}${showFx?`<span class="fx">=B${r}*C${r}*(1-D${r}/100)</span>`:""}</td>
+      <td class="hidecol"><button data-del="${it.id}" class="d" style="padding:2px 8px">✕</button></td></tr>`}).join("")
+    :`<tr><td colspan="8" class="empty">ยังไม่มีรายการ — เพิ่มสินค้าด้านบน</td></tr>`;
+  const all=items.length;
+  const sumAll=items.reduce((s,i)=>s+total(i),0);
+  $("foot").innerHTML=all?`<tr><td class="hidecol"></td><td colspan="2">รวมทั้งหมด ${all} รายการ</td><td class="n">${fmtq(items.reduce((s,i)=>s+i.q,0))}</td><td></td><td></td><td class="n">${fmt(sumAll)}${showFx?`<span class="fx">=SUM(E2:E${all+1})</span>`:""}</td><td class="hidecol"></td></tr>`:"";
+  $("cnt").textContent=sel.size?`เลือก ${sel.size} จาก ${all} รายการ`:`ทั้งหมด ${all} รายการ`;
+  $("del").disabled=!sel.size;
+  $("all").checked=all>0&&sel.size===all;
+  // group summary
+  const c=chosen(),g={};
+  c.forEach(i=>{const x=g[i.n]||(g[i.n]={n:i.n,c:0,q:0,t:0});x.c++;x.q+=i.q;x.t+=total(i)});
+  const gs=Object.values(g);
+  $("grp").innerHTML=gs.length?gs.map(x=>`<tr><td>${esc(x.n)}</td><td class="n">${x.c}</td><td class="n">${fmtq(x.q)}</td><td class="n f">${fmt(x.t)}${showFx?`<span class="fx">=SUMIF(ชื่อสินค้า,"${esc(x.n)}",รวม)</span>`:""}</td></tr>`).join(""):`<tr><td colspan="4" class="empty">—</td></tr>`;
+  $("gfoot").innerHTML=gs.length?`<tr><td>รวม</td><td class="n">${c.length}</td><td class="n">${fmtq(c.reduce((s,i)=>s+i.q,0))}</td><td class="n">${fmt(c.reduce((s,i)=>s+total(i),0))}</td></tr>`:"";
+}
+
+function add(){
+  const n=$("n").value.trim();if(!n){$("n").focus();return}
+  const num=id=>Math.max(0,parseFloat($(id).value)||0);
+  items.push({id:Date.now()+Math.random(),n,q:num("q"),p:num("p"),d:Math.min(100,num("d"))});
+  save();$("n").value="";$("n").focus();render();
+}
+$("addBtn").onclick=add;
+["n","q","p","d"].forEach(id=>$(id).addEventListener("keydown",e=>{if(e.key==="Enter")add()}));
+$("fx").onchange=render;
+$("all").onchange=e=>{sel=e.target.checked?new Set(items.map(i=>i.id)):new Set();render()};
+$("rows").addEventListener("change",e=>{const id=e.target.dataset.id;if(id==null)return;const k=+id;e.target.checked?sel.add(k):sel.delete(k);render()});
+$("rows").addEventListener("click",e=>{const id=e.target.dataset.del;if(id==null)return;
+  if(!confirm("ลบรายการนี้?"))return;items=items.filter(i=>i.id!==+id);sel.delete(+id);save();render()});
+$("del").onclick=()=>{if(!confirm(`ลบ ${sel.size} รายการที่เลือก?`))return;items=items.filter(i=>!sel.has(i.id));sel.clear();save();render()};
+
+// ---- Excel: real formulas (rows = selected, or all when none selected) ----
+$("xls").onclick=()=>{
+  const c=chosen();if(!c.length){alert("ยังไม่มีรายการ");return}
+  const ws={},L=c.length;
+  ["ชื่อสินค้า","จำนวน","ราคา/หน่วย","ส่วนลด %","รวม"].forEach((h,k)=>ws[String.fromCharCode(65+k)+"1"]={t:"s",v:h});
+  c.forEach((it,k)=>{const r=k+2;
+    ws["A"+r]={t:"s",v:it.n};ws["B"+r]={t:"n",v:it.q};ws["C"+r]={t:"n",v:it.p};ws["D"+r]={t:"n",v:it.d};
+    ws["E"+r]={t:"n",v:total(it),f:`B${r}*C${r}*(1-D${r}/100)`,z:"#,##0.00"}});
+  const tr=L+2;ws["A"+tr]={t:"s",v:"รวมทั้งหมด"};
+  ws["B"+tr]={t:"n",v:c.reduce((s,i)=>s+i.q,0),f:`SUM(B2:B${L+1})`};
+  ws["E"+tr]={t:"n",v:c.reduce((s,i)=>s+total(i),0),f:`SUM(E2:E${L+1})`,z:"#,##0.00"};
+  ws["!ref"]=`A1:E${tr}`;ws["!cols"]=[{wch:50},{wch:10},{wch:14},{wch:10},{wch:16}];
+  // grouped sheet using SUMIF over the detail sheet
+  const names=[...new Set(c.map(i=>i.n))],g={};
+  names.forEach(n=>g[n]=c.filter(i=>i.n===n));
+  const w2={"!cols":[{wch:50},{wch:14},{wch:12},{wch:16}]};
+  ["ชื่อสินค้า","จำนวนรายการ","รวมจำนวน","รวมเป็นเงิน"].forEach((h,k)=>w2[String.fromCharCode(65+k)+"1"]={t:"s",v:h});
+  const R=`รายการ!$A$2:$A$${L+1}`;
+  names.forEach((n,k)=>{const r=k+2,a=g[n];
+    w2["A"+r]={t:"s",v:n};
+    w2["B"+r]={t:"n",v:a.length,f:`COUNTIF(${R},A${r})`};
+    w2["C"+r]={t:"n",v:a.reduce((s,i)=>s+i.q,0),f:`SUMIF(${R},A${r},รายการ!$B$2:$B$${L+1})`};
+    w2["D"+r]={t:"n",v:a.reduce((s,i)=>s+total(i),0),f:`SUMIF(${R},A${r},รายการ!$E$2:$E$${L+1})`,z:"#,##0.00"}});
+  const gt=names.length+2;w2["A"+gt]={t:"s",v:"รวม"};
+  [["B",c.length],["C",c.reduce((s,i)=>s+i.q,0)],["D",c.reduce((s,i)=>s+total(i),0)]].forEach(([col,v])=>
+    w2[col+gt]={t:"n",v,f:`SUM(${col}2:${col}${gt-1})`,z:col==="D"?"#,##0.00":undefined});
+  w2["!ref"]=`A1:D${gt}`;
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"รายการ");XLSX.utils.book_append_sheet(wb,w2,"รวมตามสินค้า");
+  XLSX.writeFile(wb,`ตารางคำนวณ_${new Date().toISOString().slice(0,10)}.xlsx`);
+};
+
+// ---- PDF: print only the chosen rows, user picks "Save as PDF" ----
+$("pdf").onclick=()=>{
+  if(!items.length){alert("ยังไม่มีรายการ");return}
+  const keep=new Set(sel),all=sel.size===0;
+  const hidden=[];
+  if(!all)[...$("rows").rows].forEach((tr,k)=>{if(!sel.has(items[k].id)){tr.style.display="none";hidden.push(tr)}});
+  if(!all){$("foot").style.display="none";hidden.push($("foot"))}
+  $("ptitle").textContent="รายการสินค้า — "+new Date().toLocaleDateString("th-TH")+(all?"":` (เลือก ${keep.size} รายการ)`);
+  const done=()=>{hidden.forEach(t=>t.style.display="");window.removeEventListener("afterprint",done)};
+  window.addEventListener("afterprint",done);
+  window.print();
+};
+render();
+</script>
+</body>
+</html>
