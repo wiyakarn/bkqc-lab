@@ -1,10 +1,10 @@
-<title>ตารางคูณอัตโนมัติ</title>
+<title>ตารางคำนวณวัตถุดิบ</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap">
 <style>
-/* Layout: one working table. name | amount | unit | any number of multiplier columns | result */
+/* Layout: one table in four labelled groups: 1 name | 2 amount | 3 any number of calculation steps | 4 result */
 :root{--bg:#f4f3ef;--sur:#fff;--sur2:#fffdf5;--brd:#d0cec4;--tx:#1a1916;--tx2:#6b6860;--grn:#1d6f42;--grn2:#e8f3ed;--blu2:#e8f0fa;--red:#c0392b;--amb2:#fef8ec;--onacc:#fff}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17191a;--sur:#202324;--sur2:#2a2d2a;--brd:#3a3e3c;--tx:#ecebe6;--tx2:#a2a198;--grn:#4cb07e;--grn2:#1f3328;--blu2:#1f2d3f;--red:#ef7b6e;--amb2:#3a3220;--onacc:#10170f;color-scheme:dark}}
 :root[data-theme="dark"]{--bg:#17191a;--sur:#202324;--sur2:#2a2d2a;--brd:#3a3e3c;--tx:#ecebe6;--tx2:#a2a198;--grn:#4cb07e;--grn2:#1f3328;--blu2:#1f2d3f;--red:#ef7b6e;--amb2:#3a3220;--onacc:#10170f;color-scheme:dark}
@@ -30,6 +30,8 @@ button:disabled{opacity:.4;cursor:default}
 table{border-collapse:collapse;width:100%}
 th{background:var(--grn);color:var(--onacc);font-weight:600;padding:6px;font-size:12px;text-align:left;vertical-align:top}
 th input{background:var(--sur2);color:var(--tx);font-weight:600}
+th.grp{background:var(--grn2);color:var(--grn);text-align:center;font-size:13px;border:1px solid var(--brd)}
+th select{width:100%;padding:5px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx);margin-top:4px}
 th.def{background:var(--grn2);color:var(--tx2);font-weight:400;font-size:11px}
 td{border:1px solid var(--brd);padding:4px 6px;vertical-align:top}
 td.n{text-align:right;font-variant-numeric:tabular-nums}
@@ -48,15 +50,15 @@ tfoot td{background:var(--grn2);font-weight:700}
 </style>
 
 <div class="wrap">
-<h1>ตารางคูณอัตโนมัติ</h1>
-<div class="sub">พิมพ์ชื่อรายการ ใส่ปริมาณ แล้วเพิ่มช่องตัวคูณได้กี่ช่องก็ได้ ผลลัพธ์ = ปริมาณ × ตัวคูณทุกช่อง · ช่อง "ค่าทุกแถว" ใช้เป็นค่าอัตโนมัติ แถวไหนไม่กรอกจะใช้ค่านั้น · ข้อมูลเก็บในเบราว์เซอร์ของคุณ ข้อมูลที่เห็นตอนเปิดครั้งแรกเป็นตัวอย่าง</div>
+<h1>ตารางคำนวณวัตถุดิบ</h1>
+<div class="sub">① พิมพ์ชื่อวัตถุดิบ ② ใส่ปริมาณ ③ เพิ่มขั้นคำนวณได้หลายขั้น เลือกฟังก์ชันของแต่ละขั้น (คูณ หาร บวก ลบ เพิ่ม/ลด % ปัดขึ้น) ④ ผลลัพธ์ออกอัตโนมัติ · ขั้นคำนวณทำเรียงจากซ้ายไปขวา · ช่อง "ค่าทุกแถว" ใช้กับทุกแถวที่เว้นว่าง · ข้อมูลเก็บในเบราว์เซอร์ของคุณ ข้อมูลที่เห็นตอนเปิดครั้งแรกเป็นตัวอย่าง</div>
 
 <div class="msg" id="msg" hidden><span id="msgt"></span><button class="d" id="msgok" hidden>ตกลง</button><button id="msgno">ปิด</button></div>
 
 <div class="card">
   <div class="bar">
     <button class="p" id="addRow">+ เพิ่มรายการ</button>
-    <button id="addCol">+ เพิ่มช่องตัวคูณ</button>
+    <select id="newOp" aria-label="ฟังก์ชันของขั้นใหม่" style="width:auto;padding:7px"></select><button id="addCol">+ เพิ่มขั้นคำนวณ</button>
     <label class="chk"><input type="checkbox" id="all"> เลือกทั้งหมด</label>
     <span class="cnt" id="cnt"></span><span class="sp"></span>
     <label class="chk"><input type="checkbox" id="fx" checked> แสดงสูตร</label>
@@ -80,52 +82,66 @@ tfoot td{background:var(--grn2);font-weight:700}
 
 <script>
 const $=id=>document.getElementById(id);
-const KEY="multiplyTable.v1";
+const KEY="calcMaterials.v1";
 let uidN=Date.now();const uid=()=>++uidN;
+// each step takes the running value a and the step value v; x() builds the same step as an Excel expression
+const OPS={
+ mul:{l:"× คูณ",d:1,f:(a,v)=>a*v,x:(e,c)=>`(${e}*${c})`},
+ div:{l:"÷ หาร",d:1,f:(a,v)=>v===0?NaN:a/v,x:(e,c)=>`(${e}/${c})`},
+ add:{l:"+ บวก",d:0,f:(a,v)=>a+v,x:(e,c)=>`(${e}+${c})`},
+ sub:{l:"− ลบ",d:0,f:(a,v)=>a-v,x:(e,c)=>`(${e}-${c})`},
+ inc:{l:"+% เพิ่ม %",d:0,f:(a,v)=>a*(1+v/100),x:(e,c)=>`(${e}*(1+${c}/100))`},
+ dec:{l:"−% ลด %",d:0,f:(a,v)=>a*(1-v/100),x:(e,c)=>`(${e}*(1-${c}/100))`},
+ up:{l:"ปัดขึ้น (ทศนิยม)",d:0,f:(a,v)=>{const m=Math.pow(10,v);return Math.ceil(a*m-1e-9)/m},x:(e,c)=>`ROUNDUP(${e},${c})`}
+};
 let cols=[],rows=[],sel=new Set(),pending=null;
 try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s){cols=s.cols||[];rows=s.rows||[]}}catch(e){}
 if(!cols.length){
-  cols=[{id:"c1",n:"จำนวนที่ผลิต",d:200},{id:"c2",n:"เผื่อสูญเสีย (×)",d:1.05}];
-  rows=[{id:1,n:"ข้าวสวย",q:200,u:"กรัม",m:{}},{id:2,n:"หมูสับ",q:60,u:"กรัม",m:{}},{id:3,n:"ไข่ไก่",q:0.5,u:"ฟอง",m:{c2:1}},{id:4,n:"น้ำมันพืช",q:10,u:"มล.",m:{}}];
+  cols=[{id:"c1",op:"mul",n:"จำนวนที่ผลิต",d:200},{id:"c2",op:"inc",n:"เผื่อสูญเสีย %",d:5},{id:"c3",op:"up",n:"ปัดเศษขึ้น",d:0}];
+  rows=[{id:1,n:"ข้าวสวย",q:200,u:"กรัม",m:{}},{id:2,n:"หมูสับ",q:60,u:"กรัม",m:{}},{id:3,n:"ไข่ไก่",q:0.5,u:"ฟอง",m:{c2:0}},{id:4,n:"กระเทียม",q:5,u:"กรัม",m:{}}];
 }
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({cols,rows}))}catch(e){}};
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const fq=n=>n.toLocaleString("th-TH",{maximumFractionDigits:4});
+const fq=n=>isNaN(n)?"หารด้วย 0":n.toLocaleString("th-TH",{maximumFractionDigits:4});
 const L=n=>{let s="";n++;while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26)}return s};
-// effective multiplier: the row's own value if filled, otherwise the column's default (1 when empty)
-const eff=(r,c)=>{const v=r.m[c.id];return (v!==undefined&&v!==null&&v!=="")?v:(c.d??1)};
-const result=r=>cols.reduce((a,c)=>a*eff(r,c),r.q);
+// value of a step for a row: the row's own entry if filled, otherwise the column default, otherwise the function's neutral value
+const eff=(r,c)=>{const v=r.m[c.id];return (v!==undefined&&v!==null&&v!=="")?v:(c.d??OPS[c.op].d)};
+const result=r=>cols.reduce((a,c)=>OPS[c.op].f(a,eff(r,c)),r.q);
+const expr=(rowNo)=>cols.reduce((e,c,i)=>OPS[c.op].x(e,L(3+i)+rowNo),"B"+rowNo);
 const chosen=()=>sel.size?rows.filter(r=>sel.has(r.id)):rows;
+$("newOp").innerHTML=Object.entries(OPS).map(([k,o])=>`<option value="${k}">${o.l}</option>`).join("");
 function note(t,ok){$("msgt").textContent=t;$("msgok").hidden=!ok;$("msg").hidden=false}
 $("msgno").onclick=()=>{pending=null;$("msg").hidden=true};
 $("msgok").onclick=()=>{if(pending)pending();pending=null;$("msg").hidden=true};
 
 // column letters on screen match the Excel export: A name, B amount, C unit, D.. multipliers, then result
 function drawTable(){
-  $("head").innerHTML=`<tr><th style="width:34px"></th><th>ชื่อรายการ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(c=>`<th><input type="text" data-cn="${c.id}" value="${esc(c.n)}" aria-label="ชื่อช่องตัวคูณ"><button class="d x" data-cdel="${c.id}" aria-label="ลบช่อง ${esc(c.n)}">ลบช่อง</button></th>`).join("")}<th>ผลลัพธ์</th><th style="width:44px"></th></tr>
-  <tr><th class="def" colspan="4">ค่าทุกแถว (ใช้เมื่อแถวนั้นเว้นว่าง)</th>${cols.map(c=>`<th class="def"><input type="number" data-cd="${c.id}" value="${c.d??""}" step="any" placeholder="1" aria-label="ค่าทุกแถว ${esc(c.n)}"></th>`).join("")}<th class="def"></th><th class="def"></th></tr>`;
+  const nc=cols.length;
+  $("head").innerHTML=`<tr><th class="grp" colspan="2">① รายชื่อวัตถุดิบ</th><th class="grp" colspan="2">② ปริมาณ</th><th class="grp" colspan="${Math.max(nc,1)}">③ ใส่ค่าคำนวณ (ทำเรียงซ้าย → ขวา)</th><th class="grp" colspan="2">④ ผลลัพธ์</th></tr>
+  <tr><th style="width:34px"></th><th>ชื่อวัตถุดิบ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(c=>`<th><input type="text" data-cn="${c.id}" value="${esc(c.n)}" aria-label="ชื่อขั้นคำนวณ"><select data-co="${c.id}" aria-label="ฟังก์ชัน">${Object.entries(OPS).map(([k,o])=>`<option value="${k}"${k===c.op?" selected":""}>${o.l}</option>`).join("")}</select><button class="d x" data-cdel="${c.id}" aria-label="ลบขั้น ${esc(c.n)}">ลบขั้นนี้</button></th>`).join("")||"<th>ยังไม่มีขั้นคำนวณ</th>"}<th>ผลลัพธ์</th><th style="width:44px"></th></tr>
+  <tr><th class="def" colspan="4">ค่าทุกแถว (ใช้เมื่อแถวนั้นเว้นว่าง)</th>${cols.map(c=>`<th class="def"><input type="number" data-cd="${c.id}" value="${c.d??""}" step="any" placeholder="${OPS[c.op].d}" aria-label="ค่าทุกแถว ${esc(c.n)}"></th>`).join("")||"<th class=\"def\"></th>"}<th class="def"></th><th class="def"></th></tr>`;
   $("rows").innerHTML=rows.length?rows.map(r=>`<tr data-r="${r.id}" class="${sel.has(r.id)?"sel":""}">
     <td><input type="checkbox" data-id="${r.id}" ${sel.has(r.id)?"checked":""} aria-label="เลือก"></td>
     <td><input type="text" data-f="n" data-r="${r.id}" value="${esc(r.n)}" placeholder="พิมพ์ชื่อรายการ" aria-label="ชื่อรายการ"></td>
     <td><input type="number" data-f="q" data-r="${r.id}" value="${r.q||""}" min="0" step="any" aria-label="ปริมาณ"></td>
     <td><input type="text" data-f="u" data-r="${r.id}" value="${esc(r.u)}" style="min-width:60px" aria-label="หน่วย"></td>
-    ${cols.map(c=>`<td><input type="number" data-m="${c.id}" data-r="${r.id}" value="${r.m[c.id]??""}" step="any" placeholder="${esc(String(c.d??1))}" aria-label="${esc(c.n)}"></td>`).join("")}
+    ${cols.map(c=>`<td><input type="number" data-m="${c.id}" data-r="${r.id}" value="${r.m[c.id]??""}" step="any" placeholder="${OPS[c.op].d}" aria-label="${esc(c.n)}"></td>`).join("")}
     <td class="n f" data-res="${r.id}"></td>
     <td><button class="d x" data-rdel="${r.id}" aria-label="ลบรายการ">✕</button></td></tr>`).join("")
-    :`<tr><td colspan="${cols.length+6}" class="empty">ยังไม่มีรายการ กด "+ เพิ่มรายการ"</td></tr>`;
+    :`<tr><td colspan="${Math.max(cols.length,1)+5}" class="empty">ยังไม่มีรายการ กด "+ เพิ่มรายการ"</td></tr>`;
   refresh();
 }
 // live recalculation without rebuilding inputs (keeps cursor while typing)
 function refresh(){
   const fx=$("fx").checked;
   rows.forEach((r,k)=>{const td=document.querySelector(`[data-res="${r.id}"]`);if(!td)return;
-    td.innerHTML=fq(result(r))+(fx?`<span class="fx">=B${k+2}${cols.map((c,i)=>"*"+L(3+i)+(k+2)).join("")}</span>`:"")});
+    td.innerHTML=fq(result(r))+(fx?`<span class="fx">=${expr(k+2)}</span>`:"")});
   const c=chosen();
   $("cnt").textContent=sel.size?`เลือก ${sel.size} จาก ${rows.length} แถว`:`ทั้งหมด ${rows.length} แถว`;
   $("del").disabled=!sel.size;$("all").checked=rows.length>0&&sel.size===rows.length;
   const units=new Set(c.map(r=>r.u.trim())),tot=c.reduce((a,r)=>a+result(r),0);
   const rc=L(3+cols.length);
-  $("foot").innerHTML=rows.length?`<tr><td></td><td colspan="${3+cols.length}">รวมผลลัพธ์ ${c.length} แถว${units.size>1?" (หน่วยต่างกัน ดูตารางรวมด้านล่าง)":""}</td><td class="n">${units.size>1?"-":fq(tot)}${fx&&units.size<=1?`<span class="fx">=SUM(${rc}2:${rc}${c.length+1})</span>`:""}</td><td></td></tr>`:"";
+  $("foot").innerHTML=rows.length?`<tr><td></td><td colspan="${3+Math.max(cols.length,1)}">รวมผลลัพธ์ ${c.length} แถว${units.size>1?" (หน่วยต่างกัน ดูตารางรวมด้านล่าง)":""}</td><td class="n">${units.size>1?"-":fq(tot)}${fx&&units.size<=1?`<span class="fx">=SUM(${rc}2:${rc}${c.length+1})</span>`:""}</td><td></td></tr>`:"";
   const g=new Map();c.forEach(r=>{const key=r.n.trim().toLowerCase()+"|"+r.u.trim();const x=g.get(key)||{n:r.n.trim(),u:r.u.trim(),c:0,t:0};x.c++;x.t+=result(r);g.set(key,x)});
   $("grp").innerHTML=g.size?[...g.values()].map(x=>`<tr><td>${esc(x.n||"(ไม่มีชื่อ)")}</td><td>${esc(x.u)}</td><td class="n">${x.c}</td><td class="n f">${fq(x.t)}${fx?`<span class="fx">=SUMIFS(ผลลัพธ์, ชื่อ,"${esc(x.n)}")</span>`:""}</td></tr>`).join(""):`<tr><td colspan="4" class="empty">—</td></tr>`;
 }
@@ -146,10 +162,11 @@ $("head").addEventListener("input",e=>{
     document.querySelectorAll(`[data-m="${c.id}"]`).forEach(i=>i.placeholder=String(v??1))}
   save();
 });
+$("head").addEventListener("change",e=>{const id=e.target.dataset.co;if(!id)return;const c=cols.find(x=>x.id===id);c.op=e.target.value;c.d=OPS[c.op].d;save();drawTable()});
 $("head").addEventListener("click",e=>{const id=e.target.dataset.cdel;if(!id)return;
   const c=cols.find(x=>x.id===id);
   pending=()=>{cols=cols.filter(x=>x.id!==id);rows.forEach(r=>delete r.m[id]);save();drawTable()};
-  note(`ลบช่องตัวคูณ "${c.n}" ใช่ไหม`,true)});
+  note(`ลบขั้นคำนวณ "${c.n}" ใช่ไหม`,true)});
 $("rows").addEventListener("change",e=>{const id=e.target.dataset.id;if(id==null)return;e.target.checked?sel.add(+id):sel.delete(+id);
   e.target.closest("tr").classList.toggle("sel",e.target.checked);refresh()});
 $("rows").addEventListener("click",e=>{const id=e.target.dataset.rdel;if(!id)return;
@@ -157,7 +174,7 @@ $("rows").addEventListener("click",e=>{const id=e.target.dataset.rdel;if(!id)ret
 $("del").onclick=()=>{const ids=new Set(sel);pending=()=>{rows=rows.filter(r=>!ids.has(r.id));sel.clear();save();drawTable()};note(`ลบ ${ids.size} แถวที่เลือกใช่ไหม`,true)};
 $("all").onchange=e=>{sel=e.target.checked?new Set(rows.map(r=>r.id)):new Set();drawTable()};
 $("addRow").onclick=()=>{rows.push({id:uid(),n:"",q:0,u:"",m:{}});save();drawTable();const i=document.querySelectorAll('[data-f="n"]');i[i.length-1].focus()};
-$("addCol").onclick=()=>{cols.push({id:"c"+uid(),n:"ตัวคูณ "+(cols.length+1),d:1});save();drawTable()};
+$("addCol").onclick=()=>{const op=$("newOp").value;cols.push({id:"c"+uid(),op,n:OPS[op].l.replace(/^\S+\s/,"")+" "+(cols.length+1),d:OPS[op].d});save();drawTable()};
 
 // ---- downloads ----
 async function saveFile(name,data){
@@ -170,11 +187,11 @@ const stamp=()=>new Date().toISOString().slice(0,10);
 $("xls").onclick=()=>{
   const c=chosen();if(!c.length){note("ยังไม่มีรายการ",false);return}
   const ws={},rc=L(3+cols.length);
-  ["ชื่อรายการ","ปริมาณ","หน่วย",...cols.map(x=>x.n),"ผลลัพธ์"].forEach((h,k)=>ws[L(k)+"1"]={t:"s",v:h});
+  ["ชื่อรายการ","ปริมาณ","หน่วย",...cols.map(x=>`${x.n} (${OPS[x.op].l})`),"ผลลัพธ์"].forEach((h,k)=>ws[L(k)+"1"]={t:"s",v:h});
   c.forEach((r,k)=>{const q=k+2;
     ws["A"+q]={t:"s",v:r.n};ws["B"+q]={t:"n",v:r.q};ws["C"+q]={t:"s",v:r.u};
     cols.forEach((x,i)=>ws[L(3+i)+q]={t:"n",v:eff(r,x)});
-    ws[rc+q]={t:"n",v:result(r),f:`B${q}`+cols.map((x,i)=>"*"+L(3+i)+q).join("")}});
+    ws[rc+q]={t:"n",v:result(r),f:expr(q)}});
   const last=c.length+1,tr=last+1;
   ws["A"+tr]={t:"s",v:"รวมผลลัพธ์"};ws[rc+tr]={t:"n",v:c.reduce((a,r)=>a+result(r),0),f:`SUM(${rc}2:${rc}${last})`};
   ws["!ref"]=`A1:${rc}${tr}`;ws["!cols"]=[{wch:30},{wch:12},{wch:10},...cols.map(()=>({wch:16})),{wch:16}];
@@ -188,14 +205,14 @@ $("xls").onclick=()=>{
     s["D"+q]={t:"n",v:x.t,f:`SUMIFS(${R},${A},A${q},${C},B${q})`}});
   s["!ref"]=`A1:D${g.size+1}`;
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"คำนวณ");XLSX.utils.book_append_sheet(wb,s,"รวมตามชื่อ");
-  saveFile(`ตารางคูณ_${stamp()}.xlsx`,XLSX.write(wb,{bookType:"xlsx",type:"array"}));
+  saveFile(`ตารางคำนวณ_${stamp()}.xlsx`,XLSX.write(wb,{bookType:"xlsx",type:"array"}));
 };
 $("pdf").onclick=async()=>{
   const c=chosen();if(!c.length){note("ยังไม่มีรายการ",false);return}
   const body=c.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.n)}</td><td class="n">${fq(r.q)}</td><td>${esc(r.u)}</td>${cols.map(x=>`<td class="n">${fq(eff(r,x))}</td>`).join("")}<td class="n f">${fq(result(r))}</td></tr>`).join("");
   const units=new Set(c.map(r=>r.u.trim())),tot=c.reduce((a,r)=>a+result(r),0);
-  $("pdfbox").innerHTML=`<h2>ตารางคูณ ${new Date().toLocaleDateString("th-TH")}</h2>
-  <table><thead><tr><th>#</th><th>ชื่อรายการ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(x=>`<th>${esc(x.n)}</th>`).join("")}<th>ผลลัพธ์</th></tr></thead><tbody>${body}</tbody>
+  $("pdfbox").innerHTML=`<h2>ตารางคำนวณวัตถุดิบ ${new Date().toLocaleDateString("th-TH")}</h2>
+  <table><thead><tr><th>#</th><th>ชื่อรายการ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(x=>`<th>${esc(x.n)}<br><small>${OPS[x.op].l}</small></th>`).join("")}<th>ผลลัพธ์</th></tr></thead><tbody>${body}</tbody>
   <tfoot><tr><td colspan="${4+cols.length}">รวม</td><td class="n">${units.size>1?"-":fq(tot)}</td></tr></tfoot></table>`;
   try{
     await (document.fonts&&document.fonts.ready);
@@ -206,7 +223,7 @@ $("pdf").onclick=async()=>{
       part.width=cv.width;part.height=Math.round(sh*pxPer);
       part.getContext("2d").drawImage(cv,0,Math.round(y*pxPer),cv.width,part.height,0,0,cv.width,part.height);
       if(y>0)pdf.addPage();pdf.addImage(part.toDataURL("image/jpeg",.92),"JPEG",m,m,w,sh);y+=ph}
-    await saveFile(`ตารางคูณ_${stamp()}.pdf`,pdf.output("arraybuffer"));
+    await saveFile(`ตารางคำนวณ_${stamp()}.pdf`,pdf.output("arraybuffer"));
   }catch(e){note("สร้าง PDF ไม่สำเร็จ ลองอีกครั้ง",false)}
   $("pdfbox").innerHTML="";
 };
