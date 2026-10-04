@@ -59,14 +59,30 @@ tfoot td{background:var(--grn2);font-weight:700}
 <div class="savest" id="saveSt" role="status"><i></i><span id="saveTx">บันทึกอัตโนมัติ</span></div>
 <div class="msg" id="msg" hidden><span id="msgt"></span><button class="d" id="msgok" hidden>ตกลง</button><button id="msgno">ปิด</button></div>
 
+<div class="card" id="prodCard">
+  <h2 style="margin-bottom:6px">เริ่มที่นี่: สร้างชื่อสินค้าก่อน แล้วค่อยเพิ่มสูตร</h2>
+  <div class="bar" style="align-items:end">
+    <div style="flex:2;min-width:180px"><label for="pnew">ชื่อสินค้า</label><input type="text" id="pnew" placeholder="เช่น ข้าวผัดหมู" autocomplete="off"></div>
+    <div style="flex:2;min-width:160px"><label for="pnote">รายละเอียด (ไม่บังคับ)</label><input type="text" id="pnote" placeholder="ขนาด / หน่วยผลิต / หมายเหตุ" autocomplete="off"></div>
+    <button class="p" id="pCreate">+ สร้างสินค้า</button>
+  </div>
+  <div class="scroll"><table><thead><tr><th>ชื่อสินค้า</th><th>รายละเอียด</th><th>จำนวนแถวสูตร</th><th style="width:70px"></th></tr></thead><tbody id="ptbl"></tbody></table></div>
+</div>
+
 <div class="card">
   <div class="bar">
-    <div style="min-width:180px;flex:1"><label for="curP">ชื่อสินค้า (ใช้กับแถวที่เพิ่มใหม่)</label><input type="text" id="curP" list="plist" placeholder="เช่น ข้าวผัดหมู" autocomplete="off"></div>
+    <div style="min-width:180px;flex:1"><label for="curP">เพิ่มสูตรให้สินค้า</label><select id="curP" style="width:100%;padding:6px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"></select></div>
     <div style="min-width:150px"><label for="fp">แสดงสินค้า</label><select id="fp" style="width:100%;padding:6px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"></select></div>
-    <datalist id="plist"></datalist>
-    <button class="d" id="delProd" disabled>ลบสินค้าที่แสดง</button>
+    <button class="d" id="cleanBtn">🧹 ลบข้อมูลที่ไม่ใช้</button>
     <button class="d" id="clearAll">ล้างทั้งหมด</button>
     <button id="undoDel" hidden>↶ เลิกทำการลบ</button>
+  </div>
+  <div class="msg" id="clean" hidden style="display:block">
+    <div style="font-weight:600;margin-bottom:4px">เลือกข้อมูลที่ไม่ใช้แล้วลบทิ้ง</div>
+    <label class="chk" style="margin:3px 0"><input type="checkbox" id="cEmpty" checked> แถวว่าง (ไม่มีชื่อวัตถุดิบและปริมาณเป็น 0) <b id="nEmpty"></b></label>
+    <label class="chk" style="margin:3px 0"><input type="checkbox" id="cProd" checked> สินค้าที่ไม่มีสูตรเลย <b id="nProd"></b></label>
+    <label class="chk" style="margin:3px 0"><input type="checkbox" id="cDone"> แถวที่ทำเสร็จแล้ว (ที่ซ่อนอยู่) <b id="nDone"></b></label>
+    <div class="bar" style="margin:8px 0 0"><button class="d" id="cleanGo">ลบที่ติ๊ก</button><button id="cleanX">ปิด</button><span class="cnt">ลบแล้วกด "↶ เลิกทำการลบ" ได้</span></div>
   </div>
   <div class="bar">
     <button class="p" id="addRow">+ เพิ่มรายการ</button>
@@ -110,18 +126,24 @@ const OPS={
  dec:{l:"−% ลด %",d:0,f:(a,v)=>a*(1-v/100),x:(e,c)=>`(${e}*(1-${c}/100))`},
  up:{l:"ปัดขึ้น (ทศนิยม)",d:0,f:(a,v)=>{const m=Math.pow(10,v);return Math.ceil(a*m-1e-9)/m},x:(e,c)=>`ROUNDUP(${e},${c})`}
 };
-let cols=[],rows=[],sel=new Set(),pending=null,showDone=false;
-let updated=0;
-try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s){cols=s.cols||[];rows=s.rows||[];showDone=!!s.showDone;updated=s.updated||0}}catch(e){}
-if(!cols.length){
+let cols=[],rows=[],products=[],sel=new Set(),pending=null,showDone=false;
+let updated=0,hadState=false;
+try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s){cols=s.cols||[];rows=s.rows||[];products=s.products||[];showDone=!!s.showDone;updated=s.updated||0;hadState=true}}catch(e){}
+if(!hadState&&!cols.length){
   cols=[{id:"c1",op:"mul",n:"จำนวนที่ผลิต",d:200},{id:"c2",op:"inc",n:"เผื่อสูญเสีย %",d:5},{id:"c3",op:"up",n:"ปัดเศษขึ้น",d:0}];
+  products=[{name:"ข้าวผัดหมู",note:"ตัวอย่าง 1 กล่อง"},{name:"กะเพราหมูสับ",note:"ตัวอย่าง 1 กล่อง"}];
   rows=[{id:1,p:"ข้าวผัดหมู",n:"ข้าวสวย",q:200,u:"กรัม",m:{}},{id:2,p:"ข้าวผัดหมู",n:"หมูสับ",q:60,u:"กรัม",m:{}},{id:3,p:"ข้าวผัดหมู",n:"ไข่ไก่",q:0.5,u:"ฟอง",m:{c2:0}},{id:4,p:"กะเพราหมูสับ",n:"หมูสับ",q:80,u:"กรัม",m:{}},{id:5,p:"กะเพราหมูสับ",n:"ข้าวสวย",q:200,u:"กรัม",m:{}}];
 }
 // autosave: every change is written to this browser at once, and (when signed in) to the viewer's private account storage after a short pause
 let cloudDoc=null,cloudBusy=false,cloudDirty=false,cloudTimer=null;
 const hhmm=()=>new Date().toLocaleTimeString("th-TH");
 function setSt(txt,cls){$("saveSt").className="savest "+(cls||"");$("saveTx").textContent=txt}
-const stateNow=()=>({cols,rows,showDone});
+const stateNow=()=>({cols,rows,products,showDone});
+// every formula row belongs to a created product; older data gets its products created from the names already used
+function ensureProducts(){
+  const have=new Set(products.map(x=>x.name.toLowerCase()));
+  rows.forEach(r=>{if(!r.p)r.p="ทั่วไป";if(!have.has(r.p.toLowerCase())){products.push({name:r.p,note:""});have.add(r.p.toLowerCase())}});
+}
 function save(){
   updated=Date.now();
   try{localStorage.setItem(KEY,JSON.stringify({...stateNow(),updated}))}catch(e){setSt("บันทึกในเบราว์เซอร์ไม่ได้ ข้อมูลอาจหายเมื่อปิดหน้า","warn");return}
@@ -143,7 +165,7 @@ async function initCloud(){
     cloudDoc=db.doc("data/users/"+id+"/calc");
     const snap=await cloudDoc.get(),d=snap.exists?snap.data():null;
     if(d&&d.updated>updated){
-      const st=JSON.parse(d.state);cols=st.cols||[];rows=st.rows||[];showDone=!!st.showDone;updated=d.updated;
+      const st=JSON.parse(d.state);cols=st.cols||[];rows=st.rows||[];products=st.products||[];ensureProducts();showDone=!!st.showDone;updated=d.updated;
       try{localStorage.setItem(KEY,JSON.stringify({...stateNow(),updated}))}catch(e){}
       drawTable();setSt("โหลดข้อมูลล่าสุดจากบัญชีของคุณแล้ว · "+hhmm());
     }else await pushCloud();
@@ -164,7 +186,7 @@ const fac=(u,t)=>{u=(u||"").trim();const m=t.find(x=>x[0].test(u));return m?m[1]
 const grams=r=>{const f=fac(r.u,WU);return f==null?null:result(r)*f};
 const mls=r=>{const f=fac(r.u,VU);return f==null?null:result(r)*f};
 let undoStack=[];
-const snap=()=>{undoStack.push(JSON.stringify({cols,rows}));if(undoStack.length>20)undoStack.shift()};
+const snap=()=>{undoStack.push(JSON.stringify({cols,rows,products}));if(undoStack.length>20)undoStack.shift()};
 const NOP="(ไม่ระบุสินค้า)";
 let fprod="";
 const vis=()=>rows.filter(r=>(showDone||!r.done)&&(!fprod||(r.p||NOP)===fprod));
@@ -175,11 +197,15 @@ $("msgno").onclick=()=>{pending=null;$("msg").hidden=true};
 $("msgok").onclick=()=>{if(pending)pending();pending=null;$("msg").hidden=true};
 
 // column letters on screen match the Excel export: A name, B amount, C unit, D.. multipliers, then result
-function updProducts(redraw){
-  const ps=[...new Set(rows.map(r=>r.p||NOP))];
-  $("plist").innerHTML=ps.filter(x=>x!==NOP).map(x=>`<option value="${esc(x)}">`).join("");
-  const keep=ps.includes(fprod)?fprod:"";fprod=keep;
-  $("fp").innerHTML=`<option value="">ทุกสินค้า (${ps.length})</option>`+ps.map(x=>`<option value="${esc(x)}"${x===fprod?" selected":""}>${esc(x)}</option>`).join("");
+function updProducts(){
+  const names=products.map(x=>x.name);
+  if(!names.includes(fprod))fprod="";
+  const cur=$("curP").value;
+  $("curP").innerHTML=names.length?names.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join(""):`<option value="">— สร้างชื่อสินค้าก่อน —</option>`;
+  if(names.includes(cur))$("curP").value=cur;else if(fprod)$("curP").value=fprod;
+  $("fp").innerHTML=`<option value="">ทุกสินค้า (${names.length})</option>`+names.map(x=>`<option value="${esc(x)}"${x===fprod?" selected":""}>${esc(x)}</option>`).join("");
+  $("ptbl").innerHTML=products.length?products.map((x,i)=>`<tr><td><input type="text" data-pname="${i}" value="${esc(x.name)}" aria-label="ชื่อสินค้า"></td><td><input type="text" data-pnote="${i}" value="${esc(x.note||"")}" aria-label="รายละเอียด"></td><td class="n">${rows.filter(r=>r.p===x.name).length}</td><td><button class="d x" data-pdel="${i}" aria-label="ลบสินค้า ${esc(x.name)}">ลบ</button></td></tr>`).join(""):`<tr><td colspan="4" class="empty">ยังไม่มีสินค้า พิมพ์ชื่อด้านบนแล้วกด "+ สร้างสินค้า" ก่อนเพิ่มสูตร</td></tr>`;
+  $("addRow").disabled=!products.length;$("addRow").title=products.length?"":"สร้างชื่อสินค้าก่อน";
 }
 function drawTable(){updProducts();
   const nc=cols.length;
@@ -188,7 +214,7 @@ function drawTable(){updProducts();
   <tr><th class="def" colspan="5">ค่าทุกแถว (ใช้เมื่อแถวนั้นเว้นว่าง)</th>${cols.map(c=>`<th class="def"><input type="number" data-cd="${c.id}" value="${c.d??""}" step="any" placeholder="${OPS[c.op].d}" aria-label="ค่าทุกแถว ${esc(c.n)}"></th>`).join("")||"<th class=\"def\"></th>"}<th class="def"></th><th class="def"></th></tr>`;
   $("rows").innerHTML=vis().length?vis().map(r=>`<tr data-r="${r.id}" class="${sel.has(r.id)?"sel":""}${r.done?" done":""}">
     <td><input type="checkbox" data-id="${r.id}" ${sel.has(r.id)?"checked":""} aria-label="เลือก"></td>
-    <td><input type="text" data-f="p" data-r="${r.id}" list="plist" value="${esc(r.p||"")}" placeholder="ชื่อสินค้า" aria-label="ชื่อสินค้า" style="min-width:110px"></td>
+    <td><select data-f="p" data-r="${r.id}" aria-label="ชื่อสินค้า" style="min-width:110px">${products.map(x=>`<option value="${esc(x.name)}"${x.name===r.p?" selected":""}>${esc(x.name)}</option>`).join("")}</select></td>
     <td><input type="text" data-f="n" data-r="${r.id}" value="${esc(r.n)}" placeholder="พิมพ์ชื่อรายการ" aria-label="ชื่อรายการ"></td>
     <td><input type="number" data-f="q" data-r="${r.id}" value="${r.q||""}" min="0" step="any" aria-label="ปริมาณ"></td>
     <td><input type="text" data-f="u" data-r="${r.id}" value="${esc(r.u)}" style="min-width:60px" aria-label="หน่วย"></td>
@@ -205,7 +231,7 @@ function refresh(){
     td.innerHTML=fq(result(r))+(fx?`<span class="fx">=${expr(k+2)}</span>`:"")});
   const c=chosen();
   const V=vis(),nd=rows.filter(r=>r.done).length;
-  $("undoDel").hidden=!undoStack.length;$("delProd").disabled=!fprod;
+  $("undoDel").hidden=!undoStack.length;
   sel.forEach(id=>{if(!V.some(r=>r.id===id))sel.delete(id)});
   $("cnt").textContent=(sel.size?`เลือก ${sel.size} จาก ${V.length} แถว`:`แสดง ${V.length} แถว`);
   $("doneN").textContent=nd?`(${nd})`:"";$("showDone").checked=showDone;
@@ -239,7 +265,7 @@ $("fx").onchange=refresh;
 const num=v=>{const x=parseFloat(v);return isNaN(x)?undefined:x};
 $("rows").addEventListener("input",e=>{
   const t=e.target,id=+t.dataset.r;if(!id)return;const r=rows.find(x=>x.id===id);
-  if(t.dataset.f==="n"||t.dataset.f==="u"||t.dataset.f==="p"){r[t.dataset.f]=t.value;if(t.dataset.f==="p")updProducts(false)}
+  if(t.dataset.f==="n"||t.dataset.f==="u"||t.dataset.f==="p"){r[t.dataset.f]=t.value;if(t.dataset.f==="p")updProducts()}
   else if(t.dataset.f==="q")r.q=num(t.value)||0;
   else if(t.dataset.m){const v=num(t.value);if(v===undefined)delete r.m[t.dataset.m];else r.m[t.dataset.m]=v}
   save();refresh();
@@ -274,15 +300,48 @@ $("rows").addEventListener("click",e=>{const id=e.target.dataset.ins;if(!id)retu
   rows.splice(i+1,0,nr);save();drawTable();const f=document.querySelector(`[data-r="${nr.id}"][data-f="n"]`);if(f)f.focus()});
 $("head").addEventListener("click",e=>{const id=e.target.dataset.cins;if(!id)return;
   const i=cols.findIndex(c=>c.id===id);cols.splice(i,0,newCol($("newOp").value));save();drawTable()});
-$("delProd").onclick=()=>{const pn=fprod;if(!pn)return;
-  const ids=new Set(rows.filter(r=>(r.p||NOP)===pn).map(r=>r.id));
-  pending=()=>{snap();rows=rows.filter(r=>!ids.has(r.id));ids.forEach(id=>sel.delete(id));fprod="";save();drawTable()};
-  note(`ลบสินค้า "${pn}" และวัตถุดิบทั้ง ${ids.size} แถวใช่ไหม (เลิกทำได้)`,true)};
+function cleanCount(){
+  const emp=r=>!r.n.trim()&&!(r.q>0);
+  const rem=r=>($("cEmpty").checked&&emp(r))||($("cDone").checked&&r.done);
+  const left=rows.filter(r=>!rem(r));
+  return{empty:rows.filter(emp).length,done:rows.filter(r=>r.done).length,prods:products.filter(x=>!left.some(r=>r.p===x.name)).length,rem,left}
+}
+function fillClean(){const c=cleanCount();$("nEmpty").textContent=`(${c.empty})`;$("nDone").textContent=`(${c.done})`;$("nProd").textContent=`(${c.prods})`}
+$("cleanBtn").onclick=()=>{$("clean").hidden=!$("clean").hidden;if(!$("clean").hidden)fillClean()};
+$("cleanX").onclick=()=>{$("clean").hidden=true};
+["cEmpty","cProd","cDone"].forEach(id=>$(id).addEventListener("change",fillClean));
+$("cleanGo").onclick=()=>{
+  const c=cleanCount(),rr=rows.filter(c.rem),nr=rr.length;
+  const dropP=$("cProd").checked?products.filter(x=>!c.left.some(r=>r.p===x.name)):[];
+  if(!nr&&!dropP.length){note("ไม่มีข้อมูลที่ต้องลบตามที่ติ๊ก",false);return}
+  snap();const ids=new Set(rr.map(r=>r.id));
+  rows=rows.filter(r=>!ids.has(r.id));ids.forEach(id=>sel.delete(id));
+  products=products.filter(x=>!dropP.includes(x));
+  save();drawTable();$("clean").hidden=true;
+  note(`ลบแล้ว: แถว ${nr} แถว, สินค้า ${dropP.length} รายการ (กด "↶ เลิกทำการลบ" เพื่อเรียกคืน)`,false)};
+function createProduct(){
+  const name=$("pnew").value.trim();
+  if(!name){note("พิมพ์ชื่อสินค้าก่อน",false);$("pnew").focus();return}
+  if(products.some(x=>x.name.toLowerCase()===name.toLowerCase())){note(`มีสินค้า "${name}" อยู่แล้ว`,false);return}
+  products.push({name,note:$("pnote").value.trim()});$("pnew").value="";$("pnote").value="";save();updProducts();$("curP").value=name;
+  note(`สร้างสินค้า "${name}" แล้ว กด "+ เพิ่มรายการ" เพื่อใส่สูตรของสินค้านี้`,false);refresh()}
+$("pCreate").onclick=createProduct;
+$("pnew").addEventListener("keydown",e=>{if(e.key==="Enter")createProduct()});
+$("ptbl").addEventListener("change",e=>{
+  const i=e.target.dataset.pname,n=e.target.dataset.pnote;
+  if(n!=null){products[+n].note=e.target.value;save();return}
+  if(i==null)return;const old=products[+i].name,nn=e.target.value.trim();
+  if(!nn||products.some((x,k)=>k!==+i&&x.name.toLowerCase()===nn.toLowerCase())){e.target.value=old;note("ชื่อสินค้าว่างหรือซ้ำกับสินค้าอื่น",false);return}
+  products[+i].name=nn;rows.forEach(r=>{if(r.p===old)r.p=nn});if(fprod===old)fprod=nn;save();drawTable()});
+$("ptbl").addEventListener("click",e=>{const i=e.target.dataset.pdel;if(i==null)return;
+  const pn=products[+i].name,ids=new Set(rows.filter(r=>r.p===pn).map(r=>r.id));
+  pending=()=>{snap();products.splice(+i,1);rows=rows.filter(r=>!ids.has(r.id));ids.forEach(id=>sel.delete(id));save();drawTable()};
+  note(`ลบสินค้า "${pn}"${ids.size?` และสูตร ${ids.size} แถว`:""} ใช่ไหม (เลิกทำได้)`,true)});
 $("clearAll").onclick=()=>{pending=()=>{snap();rows=[];cols=[];sel.clear();fprod="";save();drawTable()};
-  note("ล้างทั้งตาราง ทั้งแถวและขั้นคำนวณ ใช่ไหม (เลิกทำได้)",true)};
-$("undoDel").onclick=()=>{const t=undoStack.pop();if(!t)return;const o=JSON.parse(t);cols=o.cols;rows=o.rows;save();drawTable();note("เลิกทำการลบแล้ว",false)};
+  note("ล้างแถวสูตรและขั้นคำนวณทั้งหมด ใช่ไหม (ชื่อสินค้ายังอยู่ เลิกทำได้)",true)};
+$("undoDel").onclick=()=>{const t=undoStack.pop();if(!t)return;const o=JSON.parse(t);cols=o.cols;rows=o.rows;products=o.products||products;save();drawTable();note("เลิกทำการลบแล้ว",false)};
 $("fp").onchange=e=>{fprod=e.target.value;drawTable()};
-$("addRow").onclick=()=>{const p=$("curP").value.trim()||(fprod&&fprod!==NOP?fprod:"");rows.push({id:uid(),p,n:"",q:0,u:"",m:{}});save();drawTable();const i=document.querySelectorAll('[data-f="n"]');i[i.length-1].focus()};
+$("addRow").onclick=()=>{const p=$("curP").value;if(!p){note("สร้างชื่อสินค้าก่อน แล้วค่อยเพิ่มสูตร",false);$("pnew").focus();return}rows.push({id:uid(),p,n:"",q:0,u:"",m:{}});save();drawTable();const i=document.querySelectorAll('[data-f="n"]');i[i.length-1].focus()};
 $("addCol").onclick=()=>{cols.push(newCol($("newOp").value));save();drawTable()};
 
 // ---- downloads ----
@@ -347,6 +406,7 @@ $("pdf").onclick=async()=>{
   }catch(e){note("สร้าง PDF ไม่สำเร็จ ลองอีกครั้ง",false)}
   $("pdfbox").innerHTML="";
 };
+ensureProducts();
 drawTable();
 initCloud();
 </script>
