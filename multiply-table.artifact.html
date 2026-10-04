@@ -49,6 +49,8 @@ tr.sel td{background:var(--amb2)}tr.sel td.f{background:var(--blu2)}
 tfoot td{background:var(--grn2);font-weight:700}
 .empty{text-align:center;color:var(--tx2);padding:16px}
 .savest{font-size:12px;color:var(--tx2);margin:-6px 0 12px;display:flex;gap:6px;align-items:center}.savest i{width:8px;height:8px;border-radius:50%;background:var(--grn);display:inline-block}.savest.warn i{background:var(--red)}.savest.busy i{background:var(--tx2)}
+.nod{color:var(--tx2);font-style:italic;text-align:center}.paper .nod,#pdfbox .nod{color:#888}
+.mx th{text-align:center}.mx td:first-child{font-weight:600}
 .msg{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border-radius:8px;background:var(--amb2);border:1px solid var(--brd);margin-bottom:12px}
 .msg[hidden]{display:none}
 .msg span{flex:1;min-width:160px}
@@ -99,7 +101,7 @@ tfoot td{background:var(--grn2);font-weight:700}
   <div class="msg" id="hist" hidden style="display:block">
     <div style="font-weight:600;margin-bottom:4px">ประวัติการบันทึก (เก็บสำเนาไว้ทุกครั้งที่ก่อนลบ ก่อนแทนที่ และทุก 5 นาที)</div>
     <div class="scroll"><table><thead><tr><th>เวลา</th><th>ที่มา</th><th>สูตร (สินค้า)</th><th>แถว</th><th style="width:210px"></th></tr></thead><tbody id="histRows"></tbody></table></div>
-    <div class="bar" style="margin:8px 0 0"><button id="histX">ปิด</button><span class="cnt">"กู้คืน" แทนที่ข้อมูลปัจจุบัน (ข้อมูลปัจจุบันถูกเก็บในประวัติก่อน) · "เพิ่มเข้า" เอาเฉพาะสูตรที่ยังไม่มีมาเพิ่ม</span></div>
+    <div class="bar" style="margin:8px 0 0"><button id="expBk">⬇ ไฟล์สำรอง (.json)</button><button id="impBk">⬆ นำเข้าไฟล์สำรอง</button><input type="file" id="impFile" accept=".json,application/json" hidden><button id="histX">ปิด</button><span class="cnt">"กู้คืน" แทนที่ข้อมูลปัจจุบัน (ข้อมูลปัจจุบันถูกเก็บในประวัติก่อน) · "เพิ่มเข้า" เอาเฉพาะสูตรที่ยังไม่มีมาเพิ่ม</span></div>
   </div>
   <div class="msg" id="clean" hidden style="display:block">
     <div style="font-weight:600;margin-bottom:4px">เลือกข้อมูลที่ไม่ใช้แล้วลบทิ้ง</div>
@@ -117,11 +119,16 @@ tfoot td{background:var(--grn2);font-weight:700}
     <label class="chk"><input type="checkbox" id="showDone"> แสดงที่เสร็จแล้ว <span id="doneN"></span></label>
     <button id="doneBtn" disabled>เสร็จแล้ว (ซ่อน)</button><button id="undoBtn" disabled hidden>เรียกคืนที่เลือก</button>
     <button class="d" id="del" disabled>ลบที่เลือก</button>
-    <select id="expMode" aria-label="รูปแบบส่งออก" style="width:auto;padding:7px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"><option value="one">รวมทุกสูตรในหน้า/ชีตเดียว</option><option value="sep">แยกหน้า/ชีตต่อสูตร</option></select><button id="xls">⬇ Excel</button><button id="pdf">⬇ PDF</button>
+    <select id="expMode" aria-label="รูปแบบส่งออก" style="width:auto;padding:7px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"><option value="one">รวมทุกสูตรในหน้า/ชีตเดียว</option><option value="sep">แยกหน้า/ชีตต่อสูตร</option><option value="mx">เทียบสูตรข้างกัน (วัตถุดิบ × สูตร)</option></select><button id="xls">⬇ Excel</button><button id="pdf">⬇ PDF</button>
   </div>
   <div class="scroll"><table>
     <thead id="head"></thead><tbody id="rows"></tbody><tfoot id="foot"></tfoot>
   </table></div>
+</div>
+
+<div class="card" id="mxCard" hidden>
+  <h2>ตารางเทียบสูตร (วัตถุดิบ × สูตร)</h2>
+  <div class="scroll" id="mxBody"></div>
 </div>
 
 <div class="card">
@@ -140,7 +147,7 @@ tfoot td{background:var(--grn2);font-weight:700}
   <div class="pv">
     <div class="pvh"><b id="pvTitle"></b>
       <label class="cnt" for="pvMode">รูปแบบ</label>
-      <select id="pvMode" style="width:auto;padding:6px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"><option value="one">รวมทุกสูตรในหน้า/ชีตเดียว</option><option value="sep">แยกหน้า/ชีตต่อสูตร</option></select>
+      <select id="pvMode" style="width:auto;padding:6px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"><option value="one">รวมทุกสูตรในหน้า/ชีตเดียว</option><option value="sep">แยกหน้า/ชีตต่อสูตร</option><option value="mx">เทียบสูตรข้างกัน (วัตถุดิบ × สูตร)</option></select>
     </div>
     <div class="pvbody" id="pvBody"></div>
     <div class="pvfoot"><span class="cnt" id="pvNote"></span><button id="pvX">ยกเลิก</button><button class="p" id="pvGo">⬇ ดาวน์โหลด</button></div>
@@ -191,8 +198,8 @@ try{backups=JSON.parse(localStorage.getItem(BKEY)||"[]")}catch(e){}
 function persistBackups(){backups.sort((a,b)=>b.t-a.t);backups=backups.slice(0,40);try{localStorage.setItem(BKEY,JSON.stringify(backups))}catch(e){}}
 function backup(why,st){
   st=st||stateNow();if(!(st.rows||[]).length&&!(st.products||[]).length)return;
-  const c=core(st);if(backups.length&&backups[0].c===c)return;
-  backups.unshift({t:Date.now(),why,c,state:JSON.parse(JSON.stringify({cols:st.cols,rows:st.rows,products:st.products}))});persistBackups();
+  const c=core(st);if(backups.length&&core(backups[0].state)===c)return;
+  backups.unshift({t:Date.now(),why,state:JSON.parse(JSON.stringify({cols:st.cols,rows:st.rows,products:st.products}))});persistBackups();
   if($("hist")&&!$("hist").hidden)fillHist();
 }
 let lastAutoBk=0;
@@ -204,9 +211,11 @@ function save(){
     setTimeout(()=>{drawTable();note("พบว่ามีการแก้ข้อมูลจากอีกหน้าต่าง จึงรวมข้อมูลให้แล้ว ไม่มีอะไรหาย ดูย้อนหลังที่ 🕘 ประวัติ / กู้คืน",false)},0);
   }
   updated=Date.now();editedSinceSeed=true;
-  try{localStorage.setItem(KEY,JSON.stringify({...stateNow(),updated}))}catch(e){setSt("บันทึกในเบราว์เซอร์ไม่ได้ ข้อมูลอาจหายเมื่อปิดหน้า","warn");return}
+  let localOk=true;
+  try{localStorage.setItem(KEY,JSON.stringify({...stateNow(),updated}))}catch(e){localOk=false}
   if(Date.now()-lastAutoBk>5*60*1000){lastAutoBk=Date.now();backup("อัตโนมัติ")}
-  if(cloudDoc&&cloudReady){setSt("กำลังบันทึก…","busy");clearTimeout(cloudTimer);cloudTimer=setTimeout(pushCloud,800)}
+  if(cloudDoc&&cloudReady){setSt(localOk?"กำลังบันทึก…":"กำลังบันทึกขึ้นบัญชี… (เบราว์เซอร์นี้เก็บข้อมูลไม่ได้)","busy");clearTimeout(cloudTimer);cloudTimer=setTimeout(pushCloud,800)}
+  else if(!localOk)setSt("เบราว์เซอร์นี้เก็บข้อมูลไม่ได้และยังไม่ได้เชื่อมบัญชี ข้อมูลจะหายเมื่อปิดหน้า กด 🕘 ประวัติ แล้วโหลดไฟล์สำรองเก็บไว้","warn");
   else setSt("บันทึกอัตโนมัติในเบราว์เซอร์นี้แล้ว · "+hhmm());
 }
 function readLocal(){try{return JSON.parse(localStorage.getItem(KEY)||"null")}catch(e){return null}}
@@ -215,7 +224,7 @@ function mergeLatest(stored,mine){
   const by=(a,b,k)=>{const m=new Map();(a||[]).forEach(x=>m.set(x[k],x));(b||[]).forEach(x=>m.set(x[k],x));return [...m.values()]};
   return{cols:by(stored.cols,mine.cols,"id"),rows:by(stored.rows,mine.rows,"id"),products:by(stored.products,mine.products,"name"),showDone:mine.showDone};
 }
-let cloudSeen=0;
+let cloudSeen=0,cloudBk=null,lastBkSig="";
 // pull in newer data written by another tab or device before this tab can overwrite it
 function syncFromStores(){
   const st=readLocal();
@@ -240,8 +249,13 @@ async function pushCloud(){
       if(core(st)!==core(stateNow())){backup("ข้อมูลหน้านี้ (ก่อนรวม)");backup("ข้อมูลในบัญชี (ก่อนรวม)",st);
         const mg=mergeLatest(st,stateNow());adopt(mg,Date.now());drawTable();note("พบการแก้ไขจากอีกเครื่อง จึงรวมข้อมูลให้แล้ว ไม่มีอะไรหาย",false)}
     }
-    await cloudDoc.set({state:JSON.stringify(stateNow()),updated,bk:JSON.stringify(backups.slice(0,12))});cloudSeen=updated;setSt("บันทึกอัตโนมัติแล้ว (บัญชีของคุณ ใช้ต่อได้ทุกเครื่อง) · "+hhmm())}
-  catch(e){setSt("บันทึกในเบราว์เซอร์นี้แล้ว แต่ยังบันทึกขึ้นบัญชีไม่สำเร็จ · "+hhmm(),"warn")}
+    const body=JSON.stringify(stateNow());
+    if(body.length>230000){setSt("ข้อมูลใหญ่เกินที่บัญชีเก็บได้ต่อชุด (256KB) ลบสูตรที่ไม่ใช้ หรือโหลดไฟล์สำรองไว้ · "+hhmm(),"warn");cloudBusy=false;return}
+    await cloudDoc.set({state:body,updated});cloudSeen=updated;
+    // history goes to its own document so a long history can never block saving the recipes themselves
+    if(cloudBk){let list=[],size=0;for(const b of backups.slice(0,20)){const l=JSON.stringify(b).length;if(size+l>200000)break;list.push(b);size+=l}
+      const sig=list.map(b=>b.t).join(",");if(sig!==lastBkSig){try{await cloudBk.set({bk:JSON.stringify(list),updated:Date.now()});lastBkSig=sig}catch(e){}}}setSt("บันทึกอัตโนมัติแล้ว (บัญชีของคุณ ใช้ต่อได้ทุกเครื่อง) · "+hhmm())}
+  catch(e){setSt("บันทึกในเบราว์เซอร์นี้แล้ว แต่ยังบันทึกขึ้นบัญชีไม่สำเร็จ ("+(e&&e.code||"error")+") ควรโหลดไฟล์สำรองไว้ · "+hhmm(),"warn")}
   cloudBusy=false;if(cloudDirty){cloudDirty=false;pushCloud()}
 }
 $("saveNow").onclick=async()=>{save();backup("กดบันทึก");clearTimeout(cloudTimer);if(cloudDoc&&cloudReady)await pushCloud();note("บันทึกรายการแล้ว · "+hhmm()+(cloudDoc&&cloudReady?" (ขึ้นบัญชีของคุณด้วย)":" (ในเบราว์เซอร์นี้)"),false)};
@@ -258,13 +272,15 @@ function mergeStates(base,extra){
 }
 const isSeedItem={row:r=>r.id>=1&&r.id<=5&&["ข้าวผัดหมู","กะเพราหมูสับ"].includes(r.p),prod:x=>/^ตัวอย่าง/.test(x.note||"")&&["ข้าวผัดหมู","กะเพราหมูสับ"].includes(x.name)};
 async function initCloud(){
-  setSt("บันทึกอัตโนมัติในเบราว์เซอร์นี้");
+  if(typeof storageOk==="undefined"||storageOk)setSt("บันทึกอัตโนมัติในเบราว์เซอร์นี้");
   try{
     const user=await claude.use("user"),db=await claude.use("db");if(!user||!db){backup("เปิดหน้า");return}
     const id=await user.id();if(!id){backup("เปิดหน้า");return}
     const doc=db.doc("data/users/"+id+"/calc");
     const snap=await doc.get(),d=snap.exists?snap.data():null;
-    if(d&&d.bk){try{const seen=new Set(backups.map(b=>b.t));JSON.parse(d.bk).forEach(b=>{if(!seen.has(b.t))backups.push(b)});persistBackups()}catch(e){}}
+    cloudBk=db.doc("data/users/"+id+"/calcbk");
+    try{const bs=await cloudBk.get();const bd=bs.exists?bs.data():null;                       // history saved with the account (older versions kept it inside the main document)
+      const raw=(bd&&bd.bk)||(d&&d.bk);if(raw){const seen=new Set(backups.map(b=>b.t));JSON.parse(raw).forEach(b=>{if(!seen.has(b.t))backups.push(b)});persistBackups()}}catch(e){}
     cloudSeen=d?d.updated:0;
     const local=stateNow();
     if(!d){cloudDoc=doc;cloudReady=true;if(!seeded||editedSinceSeed){backup("เปิดหน้า");await pushCloud()}return}
@@ -284,7 +300,7 @@ async function initCloud(){
       backup("ข้อมูลในบัญชี (ก่อนถูกแทนที่)",st);cloudDoc=doc;cloudReady=true;await pushCloud();return;
     }
     cloudDoc=doc;cloudReady=true;
-  }catch(e){cloudDoc=null;cloudReady=false;setSt("บันทึกอัตโนมัติในเบราว์เซอร์นี้ (ยังเชื่อมบัญชีไม่ได้)")}
+  }catch(e){cloudDoc=null;cloudReady=false;if(storageOk)setSt("บันทึกอัตโนมัติในเบราว์เซอร์นี้ (ยังเชื่อมบัญชีไม่ได้)")}
 }
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fq=n=>isNaN(n)?"หารด้วย 0":n.toLocaleString("th-TH",{maximumFractionDigits:4});
@@ -370,6 +386,8 @@ function refresh(){
   $("foot").innerHTML=rows.length?`<tr><td></td><td colspan="${4+Math.max(cols.length,1)}">รวมผลลัพธ์ ${c.length} แถว${units.size>1?" (หน่วยต่างกัน ดูตารางรวมด้านล่าง)":""}</td><td class="n">${units.size>1?"-":fq(tot)}${fx&&units.size<=1?`<span class="fx">=SUM(${rc}2:${rc}${c.length+1})</span>`:""}</td><td></td></tr>${wrow}${vrow}`:"";
   const wpl=weightByProduct(c).filter(x=>x.g);$("wbox").hidden=!(wpl.length>1);
   $("wprod").innerHTML=c.length?weightByProduct(c).map(x=>`<tr><td>${esc(x.p)}</td><td class="n">${x.c}</td><td class="n f">${x.g?fq(x.g):"-"}</td><td class="n">${x.g?fq(x.g/1000):"-"}</td></tr>`).join(""):`<tr><td colspan="4" class="empty">—</td></tr>`;
+  const mxh=(byProduct(c).length>=2)?matrixHtml(c):"";
+  $("mxCard").hidden=!mxh;$("mxBody").innerHTML=mxh;
   const byProd=$("gmode").value==="prod";
   const g=groupRows(c,byProd);
   $("ghead").innerHTML=`<tr>${byProd?"<th>ชื่อสินค้า</th>":""}<th>ชื่อวัตถุดิบ</th><th>หน่วย</th><th>จำนวนแถว</th><th>ผลลัพธ์รวม</th></tr>`;
@@ -381,6 +399,29 @@ function groupRows(c,byProd){
   return [...g.values()];
 }
 $("gmode").onchange=refresh;
+// ---- side-by-side view: one row per ingredient, one column group per recipe; "no data" where a recipe lacks the ingredient ----
+function matrixData(c){
+  const prods=byProduct(c).map(g=>g.name),order=[],map=new Map();
+  c.forEach(r=>{const k=r.n.trim().toLowerCase();if(!k)return;
+    let e=map.get(k);if(!e){e={name:r.n.trim(),cells:{}};map.set(k,e);order.push(e)}
+    const p=r.p||NOP,cell=e.cells[p]||(e.cells[p]={q:0,res:0,units:new Set()});
+    cell.q+=r.q;cell.res+=result(r);cell.units.add((r.u||"").trim())});
+  const showRes=c.some(r=>Math.abs(result(r)-r.q)>1e-12);
+  return{prods,ings:order,showRes};
+}
+function matrixHtml(c){
+  const d=matrixData(c);if(d.prods.length<1||!d.ings.length)return "";
+  const sub=d.showRes?2:1,u=x=>[...x.units].filter(Boolean).join("/");
+  let h=`<table class="mx"><thead><tr><th rowspan="${d.showRes?2:1}">วัตถุดิบ</th>${d.prods.map(n=>`<th colspan="${sub}">${esc(n)}</th>`).join("")}</tr>`;
+  if(d.showRes)h+=`<tr>${d.prods.map(()=>"<th>ปริมาณ</th><th>ผลลัพธ์</th>").join("")}</tr>`;
+  h+="</thead><tbody>";
+  d.ings.forEach(e=>{h+=`<tr><td>${esc(e.name)}</td>`+d.prods.map(n=>{const x=e.cells[n];
+    if(!x)return `<td class="nod" colspan="${sub}">no data</td>`;
+    return `<td class="n">${fq(x.q)} ${esc(u(x))}</td>`+(d.showRes?`<td class="n f">${fq(x.res)} ${esc(u(x))}</td>`:"")}).join("")+"</tr>"});
+  const wt=d.prods.map(n=>gsum(c.filter(r=>(r.p||NOP)===n)));
+  if(wt.some(Boolean))h+=`<tr><td>รวมน้ำหนัก</td>`+wt.map(g=>`<td class="n" colspan="${sub}"><b>${g?fq(g)+" กรัม ("+fq(g/1000)+" กก.)":"-"}</b></td>`).join("")+"</tr>";
+  return h+"</tbody></table>";
+}
 function weightByProduct(c){const m=new Map();c.forEach(r=>{const p=r.p||NOP,x=m.get(p)||{p,c:0,g:0};x.c++;x.g+=grams(r)||0;m.set(p,x)});return [...m.values()]}
 $("fx").onchange=refresh;
 
@@ -422,6 +463,23 @@ $("rows").addEventListener("click",e=>{const id=e.target.dataset.ins;if(!id)retu
   rows.splice(i+1,0,nr);save();drawTable();const f=document.querySelector(`[data-r="${nr.id}"][data-f="n"]`);if(f)f.focus()});
 $("head").addEventListener("click",e=>{const id=e.target.dataset.cins;if(!id)return;
   const i=cols.findIndex(c=>c.id===id);cols.splice(i,0,newCol($("newOp").value));save();drawTable()});
+$("expBk").onclick=async()=>{
+  const data=JSON.stringify({app:"calcMaterials",version:1,exported:Date.now(),cols,rows,products,showDone,backups:backups.slice(0,10)},null,1);
+  await saveFile(`สำรองสูตร_${stamp()}.json`,data)};
+$("impBk").onclick=()=>$("impFile").click();
+$("impFile").onchange=e=>{
+  const f=e.target.files[0];e.target.value="";if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{try{
+    const o=JSON.parse(rd.result);if(o.app!=="calcMaterials"||!Array.isArray(o.rows))throw 0;
+    backup("ก่อนนำเข้าไฟล์สำรอง");
+    const have=new Set(rows.map(r=>r.id)),addN=o.rows.filter(r=>!have.has(r.id)).length;
+    const mg=mergeStates(stateNow(),{cols:o.cols,rows:o.rows,products:o.products});adopt(mg,Date.now());
+    (o.backups||[]).forEach(b=>{if(!backups.some(x=>x.t===b.t))backups.push(b)});persistBackups();
+    save();psel.clear();drawTable();fillHist();
+    note(`นำเข้าแล้ว: เพิ่มสูตร/แถวใหม่ ${addN} แถว (ข้อมูลเดิมไม่ถูกแทนที่)`,false)
+  }catch(err){note("ไฟล์นี้ไม่ใช่ไฟล์สำรองของหน้านี้",false)}};
+  rd.readAsText(f)};
 function fillHist(){
   $("histRows").innerHTML=backups.length?backups.map((b,i)=>`<tr><td>${new Date(b.t).toLocaleString("th-TH")}</td><td>${esc(b.why)}</td><td>${esc((b.state.products||[]).map(x=>x.name).join(", ")||"—")}</td><td class="n">${(b.state.rows||[]).length}</td><td style="white-space:nowrap"><button data-hr="${i}">กู้คืน</button> <button data-hm="${i}">เพิ่มเข้า</button></td></tr>`).join(""):`<tr><td colspan="5" class="empty">ยังไม่มีประวัติ</td></tr>`;
 }
@@ -475,9 +533,9 @@ $("clearAll").onclick=()=>{pending=()=>{snap();rows=[];cols=[];sel.clear();psel.
   note("ล้างแถวสูตรและขั้นคำนวณทั้งหมด ใช่ไหม (ชื่อสินค้ายังอยู่ เลิกทำได้)",true)};
 $("undoDel").onclick=()=>{const t=undoStack.pop();if(!t)return;const o=JSON.parse(t);cols=o.cols;rows=o.rows;products=o.products||products;save();drawTable();note("เลิกทำการลบแล้ว",false)};
 $("rows").addEventListener("click",e=>{const n=e.target.dataset.addto;if(n==null)return;
-  rows.push({id:uid(),p:n,n:"",q:0,u:"",m:{}});save();drawTable();const f=document.querySelectorAll('[data-f="n"]');f[f.length-1].focus()});
+  rows.push({id:uid(),p:n,n:"",q:0,u:"",m:{}});if(psel.size)psel.add(n);save();drawTable();const f=document.querySelectorAll('[data-f="n"]');if(f.length)f[f.length-1].focus()});
 $("pchips").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const n=b.dataset.pc;if(n==="")psel.clear();else psel.has(n)?psel.delete(n):psel.add(n);drawTable()});
-$("addRow").onclick=()=>{const p=$("curP").value;if(!p){note("สร้างชื่อสินค้าก่อน แล้วค่อยเพิ่มสูตร",false);$("pnew").focus();return}rows.push({id:uid(),p,n:"",q:0,u:"",m:{}});save();drawTable();const i=document.querySelectorAll('[data-f="n"]');i[i.length-1].focus()};
+$("addRow").onclick=()=>{const p=$("curP").value;if(!p){note("สร้างชื่อสินค้าก่อน แล้วค่อยเพิ่มสูตร",false);$("pnew").focus();return}rows.push({id:uid(),p,n:"",q:0,u:"",m:{}});if(psel.size)psel.add(p);save();drawTable();const i=document.querySelectorAll('[data-f="n"]');if(i.length)i[i.length-1].focus()};
 $("addCol").onclick=()=>{cols.push(newCol($("newOp").value));save();drawTable()};
 
 // ---- downloads ----
@@ -503,7 +561,7 @@ function buildCalc(c,withP){
   const ws={};spec.forEach(x=>ws[x.l+"1"]={t:"s",v:x.h});
   c.forEach((r,k)=>{const q=k+2;
     if(withP)ws[LT.p+q]={t:"s",v:r.p||NOP};
-    ws[LT.n+q]={t:"s",v:r.n};ws[LT.q+q]={t:"n",v:r.q};if(hasU)ws[LT.u+q]={t:"s",v:r.u};
+    ws[LT.n+q]={t:"s",v:r.n.trim()};ws[LT.q+q]={t:"n",v:r.q};if(hasU)ws[LT.u+q]={t:"s",v:r.u};
     let e=LT.q+q;act.forEach(x=>{ws[LT["s"+x.id]+q]={t:"n",v:eff(r,x)};e=OPS[x.op].x(e,LT["s"+x.id]+q)});
     ws[LT.r+q]={t:"n",v:result(r),f:e};
     const wf=fac(r.u,WU);if(hasW&&wf!=null)ws[LT.w+q]={t:"n",v:result(r)*wf,f:`${LT.r}${q}*${wf}`}});
@@ -518,8 +576,27 @@ function buildCalc(c,withP){
   ws["!ref"]=`A1:${spec[spec.length-1].l}${hasW?tr+2:tr}`;ws["!cols"]=spec.map(x=>({wch:x.k==="p"?22:x.k==="n"?26:x.k==="u"?10:16}));
   return{ws,LT,last,tr,wsum,hasW,hasU};
 }
+function matrixSheet(c,LT,last){
+  const d=matrixData(c),sub=d.showRes?2:1,ws={},merges=[],rg=l=>`คำนวณ!$${l}$2:$${l}$${last}`;
+  ws["A1"]={t:"s",v:"วัตถุดิบ"};
+  d.prods.forEach((n,i)=>{const c0=1+i*sub;ws[L(c0)+"1"]={t:"s",v:n};if(sub>1){ws[L(c0)+"2"]={t:"s",v:"ปริมาณ"};ws[L(c0+1)+"2"]={t:"s",v:"ผลลัพธ์"};merges.push({s:{r:0,c:c0},e:{r:0,c:c0+1}})}});
+  const r0=d.showRes?3:2;
+  d.ings.forEach((e,k)=>{const q=r0+k;ws["A"+q]={t:"s",v:e.name};
+    d.prods.forEach((n,i)=>{const c0=1+i*sub,x=e.cells[n],P=`${L(c0)}$1`,crit=`${rg(LT.p)},${P},${rg(LT.n)},$A${q}`;
+      const nd=`COUNTIFS(${crit})=0`;
+      ws[L(c0)+q]={t:x?"n":"s",v:x?x.q:"no data",f:`IF(${nd},"no data",SUMIFS(${rg(LT.q)},${crit}))`};
+      if(sub>1)ws[L(c0+1)+q]={t:x?"n":"s",v:x?x.res:"no data",f:`IF(${nd},"no data",SUMIFS(${rg(LT.r)},${crit}))`}})});
+  if(LT.w){const q=r0+d.ings.length;ws["A"+q]={t:"s",v:"รวมน้ำหนัก (กรัม)"};
+    d.prods.forEach((n,i)=>{const c0=1+i*sub,cl=L(c0+sub-1);ws[cl+q]={t:"n",v:gsum(c.filter(r=>(r.p||NOP)===n)),f:`SUMIFS(${rg(LT.w)},${rg(LT.p)},${L(c0)}$1)`}})}
+  const lastR=r0+d.ings.length+(LT.w?0:-1);ws["!ref"]=`A1:${L(d.prods.length*sub)}${lastR+1}`;ws["!merges"]=merges;
+  ws["!cols"]=[{wch:28},...d.prods.flatMap(()=>Array(sub).fill({wch:16}))];return ws;
+}
 function buildXlsx(c){
   const wb=XLSX.utils.book_new(),sep=$("expMode").value==="sep";
+  if($("expMode").value==="mx"){
+    const {ws,LT,last}=buildCalc(c,true);
+    XLSX.utils.book_append_sheet(wb,matrixSheet(c,LT,last),"เทียบสูตร");XLSX.utils.book_append_sheet(wb,ws,"คำนวณ");return wb;
+  }
   if(sep){
     // one sheet per product, plus a weight summary that points at each sheet's total (only when weights exist)
     const used=new Set(),sum={"!cols":[{wch:30},{wch:18},{wch:14}]},list=byProduct(c),wl=[];
@@ -578,6 +655,7 @@ function summaryBlock(c){
 }
 function buildParts(c){
   const head=`<h2>ตารางคำนวณวัตถุดิบ ${new Date().toLocaleDateString("th-TH")}</h2>`,list=byProduct(c),sm=summaryBlock(c);
+  if($("expMode").value==="mx")return [head+matrixHtml(c)+sm];
   return $("expMode").value==="sep"
     ?list.map((g,k)=>(k?"":head)+productBlock(g.name,g.rs)).concat(sm?[sm]:[])
     :[head+list.map(g=>productBlock(g.name,g.rs)).join("")+sm];
@@ -638,6 +716,8 @@ try{const old=JSON.parse(localStorage.getItem("multiplyTable.v1")||"null");
     const o={cols:(old.cols||[]).map(c=>({...c,op:c.op||"mul"})),rows:(old.rows||[]).map(r=>({...r,p:r.p||"ทั่วไป",m:r.m||{}})),products:[]};
     const have=new Set();o.rows.forEach(r=>{if(!have.has(r.p)){have.add(r.p);o.products.push({name:r.p,note:""})}});
     backup("ข้อมูลเก่า (เวอร์ชันแรก)",o)}}catch(e){}
+let storageOk=true;
+try{localStorage.setItem("calcMaterials.probe","1");localStorage.removeItem("calcMaterials.probe")}catch(e){storageOk=false;setSt("เบราว์เซอร์นี้ไม่อนุญาตให้เก็บข้อมูลในเครื่อง ระบบจะบันทึกขึ้นบัญชีแทน (ถ้าเข้าสู่ระบบ) และควรโหลดไฟล์สำรองไว้","warn")}
 ensureProducts();
 drawTable();
 if(!seeded)backup("เปิดหน้า");
