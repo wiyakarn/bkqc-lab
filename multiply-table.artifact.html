@@ -47,9 +47,21 @@ tfoot td{background:var(--grn2);font-weight:700}
 .msg[hidden]{display:none}
 .msg span{flex:1;min-width:160px}
 .x{padding:1px 7px;border-radius:12px;font-size:12px;margin-top:4px}
-#pdfbox{position:fixed;left:-10000px;top:0;width:900px;padding:24px;background:#fff;color:#111;font-family:Sarabun,"Noto Sans Thai",sans-serif;font-size:13px}
-#pdfbox table{width:100%}#pdfbox th{background:#1d6f42;color:#fff}#pdfbox td{border-color:#bbb;color:#111;background:#fff}
-#pdfbox td.f{background:#e8f0fa}#pdfbox tfoot td{background:#e8f3ed}#pdfbox h2{color:#1d6f42;font-size:17px}
+#pdfbox{position:fixed;left:-10000px;top:0;width:900px;padding:24px}
+#pdfbox,.paper{background:#fff;color:#111;font-family:Sarabun,"Noto Sans Thai",sans-serif;font-size:13px}
+.paper{padding:16px;border:1px solid var(--brd);min-width:640px}
+#pdfbox table,.paper table{width:100%}#pdfbox th,.paper th{background:#1d6f42;color:#fff}#pdfbox td,.paper td{border-color:#bbb;color:#111;background:#fff}
+#pdfbox td.f,.paper td.f{background:#e8f0fa}#pdfbox tfoot td,.paper tfoot td{background:#e8f3ed}#pdfbox h2,.paper h2{color:#1d6f42;font-size:17px;display:block}
+.pvwrap{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:12px;z-index:50}
+.pvwrap[hidden]{display:none}
+.pv{background:var(--sur);color:var(--tx);border:1px solid var(--brd);border-radius:10px;max-width:960px;width:100%;max-height:100%;display:flex;flex-direction:column}
+.pvh{padding:10px 12px;border-bottom:1px solid var(--brd);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pvh b{flex:1;min-width:160px}
+.pvbody{overflow:auto;padding:12px;flex:1}
+.pvfoot{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-items:center;padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--brd)}
+.pvfoot .cnt{flex:1;min-width:180px}
+.pvlab{font-size:12px;color:var(--tx2);margin:8px 0 4px}
+.xp table{border-collapse:collapse}.xp td{border:1px solid var(--brd);padding:3px 6px;font-size:12px;white-space:nowrap}.xp tr:first-child td{background:var(--grn);color:var(--onacc);font-weight:600}
 </style>
 
 <div class="wrap">
@@ -72,7 +84,7 @@ tfoot td{background:var(--grn2);font-weight:700}
 <div class="card">
   <div class="bar">
     <div style="min-width:180px;flex:1"><label for="curP">เพิ่มสูตรให้สินค้า</label><select id="curP" style="width:100%;padding:6px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"></select></div>
-    <div style="min-width:150px"><label for="fp">แสดงสินค้า</label><select id="fp" style="width:100%;padding:6px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"></select></div>
+    <div style="flex:2;min-width:220px"><label>เลือกสูตรที่จะแสดง / ส่งออก (เลือกได้หลายสูตร)</label><div class="modes" id="pchips" style="margin:2px 0 0"></div></div>
     <button class="d" id="cleanBtn">🧹 ลบข้อมูลที่ไม่ใช้</button>
     <button class="d" id="clearAll">ล้างทั้งหมด</button>
     <button id="undoDel" hidden>↶ เลิกทำการลบ</button>
@@ -93,7 +105,7 @@ tfoot td{background:var(--grn2);font-weight:700}
     <label class="chk"><input type="checkbox" id="showDone"> แสดงที่เสร็จแล้ว <span id="doneN"></span></label>
     <button id="doneBtn" disabled>เสร็จแล้ว (ซ่อน)</button><button id="undoBtn" disabled hidden>เรียกคืนที่เลือก</button>
     <button class="d" id="del" disabled>ลบที่เลือก</button>
-    <button id="xls">⬇ Excel</button><button id="pdf">⬇ PDF</button>
+    <select id="expMode" aria-label="รูปแบบส่งออก" style="width:auto;padding:7px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"><option value="one">รวมทุกสูตรในหน้า/ชีตเดียว</option><option value="sep">แยกหน้า/ชีตต่อสูตร</option></select><button id="xls">⬇ Excel</button><button id="pdf">⬇ PDF</button>
   </div>
   <div class="scroll"><table>
     <thead id="head"></thead><tbody id="rows"></tbody><tfoot id="foot"></tfoot>
@@ -110,6 +122,16 @@ tfoot td{background:var(--grn2);font-weight:700}
   <div class="scroll"><table><thead><tr><th>ชื่อสินค้า</th><th>จำนวนแถว</th><th>น้ำหนักรวม (กรัม)</th><th>เป็น กก.</th></tr></thead><tbody id="wprod"></tbody></table></div>
 </div>
 <div id="pdfbox"></div>
+<div class="pvwrap" id="pv" hidden role="dialog" aria-modal="true" aria-labelledby="pvTitle">
+  <div class="pv">
+    <div class="pvh"><b id="pvTitle"></b>
+      <label class="cnt" for="pvMode">รูปแบบ</label>
+      <select id="pvMode" style="width:auto;padding:6px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"><option value="one">รวมทุกสูตรในหน้า/ชีตเดียว</option><option value="sep">แยกหน้า/ชีตต่อสูตร</option></select>
+    </div>
+    <div class="pvbody" id="pvBody"></div>
+    <div class="pvfoot"><span class="cnt" id="pvNote"></span><button id="pvX">ยกเลิก</button><button class="p" id="pvGo">⬇ ดาวน์โหลด</button></div>
+  </div>
+</div>
 </div>
 
 <script>
@@ -190,8 +212,8 @@ const mls=r=>{const f=fac(r.u,VU);return f==null?null:result(r)*f};
 let undoStack=[];
 const snap=()=>{undoStack.push(JSON.stringify({cols,rows,products}));if(undoStack.length>20)undoStack.shift()};
 const NOP="(ไม่ระบุสินค้า)";
-let fprod="";
-const vis=()=>rows.filter(r=>(showDone||!r.done)&&(!fprod||(r.p||NOP)===fprod));
+let psel=new Set();
+const vis=()=>rows.filter(r=>(showDone||!r.done)&&(!psel.size||psel.has(r.p||NOP)));
 const chosen=()=>sel.size?vis().filter(r=>sel.has(r.id)):vis();
 $("newOp").innerHTML=Object.entries(OPS).map(([k,o])=>`<option value="${k}">${o.l}</option>`).join("");
 function note(t,ok){$("msgt").textContent=t;$("msgok").hidden=!ok;$("msg").hidden=false}
@@ -201,11 +223,11 @@ $("msgok").onclick=()=>{if(pending)pending();pending=null;$("msg").hidden=true};
 // column letters on screen match the Excel export: A name, B amount, C unit, D.. multipliers, then result
 function updProducts(){
   const names=products.map(x=>x.name);
-  if(!names.includes(fprod))fprod="";
+  [...psel].forEach(x=>{if(!names.includes(x))psel.delete(x)});
   const cur=$("curP").value;
   $("curP").innerHTML=names.length?names.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join(""):`<option value="">— สร้างชื่อสินค้าก่อน —</option>`;
-  if(names.includes(cur))$("curP").value=cur;else if(fprod)$("curP").value=fprod;
-  $("fp").innerHTML=`<option value="">ทุกสินค้า (${names.length})</option>`+names.map(x=>`<option value="${esc(x)}"${x===fprod?" selected":""}>${esc(x)}</option>`).join("");
+  if(names.includes(cur))$("curP").value=cur;else if(psel.size)$("curP").value=[...psel][0];
+  $("pchips").innerHTML=`<button data-pc="" aria-pressed="${!psel.size}">ทุกสูตร</button>`+names.map(x=>`<button data-pc="${esc(x)}" aria-pressed="${psel.has(x)}">${esc(x)}</button>`).join("");
   $("ptbl").innerHTML=products.length?products.map((x,i)=>`<tr><td><input type="text" data-pname="${i}" value="${esc(x.name)}" aria-label="ชื่อสินค้า"></td><td><input type="text" data-pnote="${i}" value="${esc(x.note||"")}" aria-label="รายละเอียด"></td><td class="n">${rows.filter(r=>r.p===x.name).length}</td><td><button class="d x" data-pdel="${i}" aria-label="ลบสินค้า ${esc(x.name)}">ลบ</button></td></tr>`).join(""):`<tr><td colspan="4" class="empty">ยังไม่มีสินค้า พิมพ์ชื่อด้านบนแล้วกด "+ สร้างสินค้า" ก่อนเพิ่มสูตร</td></tr>`;
   $("addRow").disabled=!products.length;$("addRow").title=products.length?"":"สร้างชื่อสินค้าก่อน";
 }
@@ -334,15 +356,15 @@ $("ptbl").addEventListener("change",e=>{
   if(n!=null){products[+n].note=e.target.value;save();return}
   if(i==null)return;const old=products[+i].name,nn=e.target.value.trim();
   if(!nn||products.some((x,k)=>k!==+i&&x.name.toLowerCase()===nn.toLowerCase())){e.target.value=old;note("ชื่อสินค้าว่างหรือซ้ำกับสินค้าอื่น",false);return}
-  products[+i].name=nn;rows.forEach(r=>{if(r.p===old)r.p=nn});if(fprod===old)fprod=nn;save();drawTable()});
+  products[+i].name=nn;rows.forEach(r=>{if(r.p===old)r.p=nn});if(psel.has(old)){psel.delete(old);psel.add(nn)}save();drawTable()});
 $("ptbl").addEventListener("click",e=>{const i=e.target.dataset.pdel;if(i==null)return;
   const pn=products[+i].name,ids=new Set(rows.filter(r=>r.p===pn).map(r=>r.id));
   pending=()=>{snap();products.splice(+i,1);rows=rows.filter(r=>!ids.has(r.id));ids.forEach(id=>sel.delete(id));save();drawTable()};
   note(`ลบสินค้า "${pn}"${ids.size?` และสูตร ${ids.size} แถว`:""} ใช่ไหม (เลิกทำได้)`,true)});
-$("clearAll").onclick=()=>{pending=()=>{snap();rows=[];cols=[];sel.clear();fprod="";save();drawTable()};
+$("clearAll").onclick=()=>{pending=()=>{snap();rows=[];cols=[];sel.clear();psel.clear();save();drawTable()};
   note("ล้างแถวสูตรและขั้นคำนวณทั้งหมด ใช่ไหม (ชื่อสินค้ายังอยู่ เลิกทำได้)",true)};
 $("undoDel").onclick=()=>{const t=undoStack.pop();if(!t)return;const o=JSON.parse(t);cols=o.cols;rows=o.rows;products=o.products||products;save();drawTable();note("เลิกทำการลบแล้ว",false)};
-$("fp").onchange=e=>{fprod=e.target.value;drawTable()};
+$("pchips").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const n=b.dataset.pc;if(n==="")psel.clear();else psel.has(n)?psel.delete(n):psel.add(n);drawTable()});
 $("addRow").onclick=()=>{const p=$("curP").value;if(!p){note("สร้างชื่อสินค้าก่อน แล้วค่อยเพิ่มสูตร",false);$("pnew").focus();return}rows.push({id:uid(),p,n:"",q:0,u:"",m:{}});save();drawTable();const i=document.querySelectorAll('[data-f="n"]');i[i.length-1].focus()};
 $("addCol").onclick=()=>{cols.push(newCol($("newOp").value));save();drawTable()};
 
@@ -354,11 +376,11 @@ async function saveFile(name,data){
   catch(e){if(e&&e.code!=="declined")note("ดาวน์โหลดไม่สำเร็จ ("+(e&&e.code||"error")+")",false)}
 }
 const stamp=()=>new Date().toISOString().slice(0,10);
-$("xls").onclick=()=>{
-  const c=chosen();if(!c.length){note("ยังไม่มีรายการ",false);return}
-  const ws={},rc=L(4+cols.length);
+// rows of the chosen products, in the order the products were created
+const byProduct=c=>{const names=[...new Set([...products.map(x=>x.name),...c.map(r=>r.p||NOP)])];return names.map(n=>({name:n,rs:c.filter(r=>(r.p||NOP)===n)})).filter(x=>x.rs.length)};
+function buildCalc(c){
+  const ws={},rc=L(4+cols.length),wc=L(5+cols.length);
   ["ชื่อสินค้า","ชื่อวัตถุดิบ","ปริมาณ","หน่วย",...cols.map(x=>`${x.n} (${OPS[x.op].l})`),"ผลลัพธ์","น้ำหนัก (กรัม)"].forEach((h,k)=>ws[L(k)+"1"]={t:"s",v:h});
-  const wc=L(5+cols.length);
   c.forEach((r,k)=>{const q=k+2;
     ws["A"+q]={t:"s",v:r.p||NOP};ws["B"+q]={t:"s",v:r.n};ws["C"+q]={t:"n",v:r.q};ws["D"+q]={t:"s",v:r.u};
     cols.forEach((x,i)=>ws[L(4+i)+q]={t:"n",v:eff(r,x)});
@@ -370,43 +392,114 @@ $("xls").onclick=()=>{
   ws["A"+(tr+1)]={t:"s",v:"รวมน้ำหนัก (กรัม)"};ws[wc+(tr+1)]={t:"n",v:wsum,f:`SUM(${wc}2:${wc}${last})`};
   ws["A"+(tr+2)]={t:"s",v:"รวมน้ำหนัก (กก.)"};ws[wc+(tr+2)]={t:"n",v:wsum/1000,f:`${wc}${tr+1}/1000`};
   ws["!ref"]=`A1:${wc}${tr+2}`;ws["!cols"]=[{wch:22},{wch:26},{wch:12},{wch:10},...cols.map(()=>({wch:16})),{wch:16},{wch:16}];
-  const P=`คำนวณ!$A$2:$A$${last}`,N=`คำนวณ!$B$2:$B$${last}`,U=`คำนวณ!$D$2:$D$${last}`,R=`คำนวณ!$${rc}$2:$${rc}$${last}`;
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"คำนวณ");
-  [["รวมตามวัตถุดิบ",false],["แยกตามสินค้า",true]].forEach(([title,bp])=>{
-    const g=groupRows(c,bp),sh={"!cols":[{wch:22},{wch:26},{wch:10},{wch:12},{wch:16}]};
-    const H=bp?["ชื่อสินค้า","ชื่อวัตถุดิบ","หน่วย","จำนวนแถว","ผลลัพธ์รวม"]:["ชื่อวัตถุดิบ","หน่วย","จำนวนแถว","ผลลัพธ์รวม"];
-    H.forEach((h,k)=>sh[L(k)+"1"]={t:"s",v:h});
-    g.forEach((x,k)=>{const q=k+2;
-      if(bp){sh["A"+q]={t:"s",v:x.p};sh["B"+q]={t:"s",v:x.n};sh["C"+q]={t:"s",v:x.u};
-        sh["D"+q]={t:"n",v:x.c,f:`COUNTIFS(${P},A${q},${N},B${q},${U},C${q})`};
-        sh["E"+q]={t:"n",v:x.t,f:`SUMIFS(${R},${P},A${q},${N},B${q},${U},C${q})`}}
-      else{sh["A"+q]={t:"s",v:x.n};sh["B"+q]={t:"s",v:x.u};
-        sh["C"+q]={t:"n",v:x.c,f:`COUNTIFS(${N},A${q},${U},B${q})`};
-        sh["D"+q]={t:"n",v:x.t,f:`SUMIFS(${R},${N},A${q},${U},B${q})`}}});
-    sh["!ref"]=`A1:${L(H.length-1)}${g.length+1}`;XLSX.utils.book_append_sheet(wb,sh,title)});
-  saveFile(`ตารางคำนวณ_${stamp()}.xlsx`,XLSX.write(wb,{bookType:"xlsx",type:"array"}));
-};
-$("pdf").onclick=async()=>{
-  const c=chosen();if(!c.length){note("ยังไม่มีรายการ",false);return}
-  const body=c.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.p||NOP)}</td><td>${esc(r.n)}</td><td class="n">${fq(r.q)}</td><td>${esc(r.u)}</td>${cols.map(x=>`<td class="n">${fq(eff(r,x))}</td>`).join("")}<td class="n f">${fq(result(r))}</td></tr>`).join("");
-  const units=new Set(c.map(r=>r.u.trim())),tot=c.reduce((a,r)=>a+result(r),0);
-  $("pdfbox").innerHTML=`<h2>ตารางคำนวณวัตถุดิบ ${new Date().toLocaleDateString("th-TH")}</h2>
-  <table><thead><tr><th>#</th><th>ชื่อสินค้า</th><th>ชื่อวัตถุดิบ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(x=>`<th>${esc(x.n)}<br><small>${OPS[x.op].l}</small></th>`).join("")}<th>ผลลัพธ์</th></tr></thead><tbody>${body}</tbody>
-  <tfoot><tr><td colspan="${5+cols.length}">รวม</td><td class="n">${units.size>1?"-":fq(tot)}</td></tr></tfoot></table>
-  <h2 style="margin-top:18px">รวมน้ำหนัก: ${(()=>{const g=c.reduce((a,r)=>a+(grams(r)||0),0);return g?`${fq(g)} กรัม (${fq(g/1000)} กก.)`:"-"})()}</h2>${(()=>{const o=c.filter(r=>grams(r)==null&&mls(r)==null);return o.length?`<div style="font-size:11px;color:#555;margin-bottom:6px">ไม่นับ ${o.length} แถวที่หน่วยไม่ใช่น้ำหนัก: ${esc([...new Set(o.map(r=>(r.n||"-")+" ("+(r.u||"ไม่มีหน่วย")+")"))].join(", "))}</div>`:""})()}
+  return{ws,rc,wc,last,tr,wsum};
+}
+function buildXlsx(c){
+  const wb=XLSX.utils.book_new(),sep=$("expMode").value==="sep";
+  if(sep){
+    // one sheet per product, plus a weight summary that points at each sheet's total
+    const used=new Set(),sum={"!cols":[{wch:30},{wch:18},{wch:14}]};
+    ["ชื่อสินค้า","น้ำหนักรวม (กรัม)","เป็น กก."].forEach((h,k)=>sum[L(k)+"1"]={t:"s",v:h});
+    const list=byProduct(c);
+    list.forEach((g,k)=>{
+      let nm=g.name.replace(/[\\\/?*\[\]:]/g," ").trim().slice(0,28)||"สินค้า";while(used.has(nm.toLowerCase()))nm=nm.slice(0,25)+"_"+(k+1);used.add(nm.toLowerCase());
+      const b=buildCalc(g.rs);XLSX.utils.book_append_sheet(wb,b.ws,nm);
+      const q=k+2;sum["A"+q]={t:"s",v:g.name};sum["B"+q]={t:"n",v:b.wsum,f:`'${nm}'!${b.wc}${b.tr+1}`};sum["C"+q]={t:"n",v:b.wsum/1000,f:`B${q}/1000`}});
+    const t=list.length+2;sum["A"+t]={t:"s",v:"รวมทุกสูตร"};
+    const tw=list.reduce((a,g)=>a+g.rs.reduce((x,r)=>x+(grams(r)||0),0),0);
+    sum["B"+t]={t:"n",v:tw,f:`SUM(B2:B${t-1})`};sum["C"+t]={t:"n",v:tw/1000,f:`B${t}/1000`};sum["!ref"]=`A1:C${t}`;
+    XLSX.utils.book_append_sheet(wb,sum,"สรุปน้ำหนัก");
+  }else{
+    const {ws,rc,last}=buildCalc(c);XLSX.utils.book_append_sheet(wb,ws,"คำนวณ");
+    const P=`คำนวณ!$A$2:$A$${last}`,N=`คำนวณ!$B$2:$B$${last}`,U=`คำนวณ!$D$2:$D$${last}`,R=`คำนวณ!$${rc}$2:$${rc}$${last}`;
+    [["รวมตามวัตถุดิบ",false],["แยกตามสินค้า",true]].forEach(([title,bp])=>{
+      const g=groupRows(c,bp),sh={"!cols":[{wch:22},{wch:26},{wch:10},{wch:12},{wch:16}]};
+      const H=bp?["ชื่อสินค้า","ชื่อวัตถุดิบ","หน่วย","จำนวนแถว","ผลลัพธ์รวม"]:["ชื่อวัตถุดิบ","หน่วย","จำนวนแถว","ผลลัพธ์รวม"];
+      H.forEach((h,k)=>sh[L(k)+"1"]={t:"s",v:h});
+      g.forEach((x,k)=>{const q=k+2;
+        if(bp){sh["A"+q]={t:"s",v:x.p};sh["B"+q]={t:"s",v:x.n};sh["C"+q]={t:"s",v:x.u};
+          sh["D"+q]={t:"n",v:x.c,f:`COUNTIFS(${P},A${q},${N},B${q},${U},C${q})`};
+          sh["E"+q]={t:"n",v:x.t,f:`SUMIFS(${R},${P},A${q},${N},B${q},${U},C${q})`}}
+        else{sh["A"+q]={t:"s",v:x.n};sh["B"+q]={t:"s",v:x.u};
+          sh["C"+q]={t:"n",v:x.c,f:`COUNTIFS(${N},A${q},${U},B${q})`};
+          sh["D"+q]={t:"n",v:x.t,f:`SUMIFS(${R},${N},A${q},${U},B${q})`}}});
+      sh["!ref"]=`A1:${L(H.length-1)}${g.length+1}`;XLSX.utils.book_append_sheet(wb,sh,title)});
+  }
+  return wb;
+}
+const saveXlsx=wb=>saveFile(`ตารางคำนวณ_${stamp()}.xlsx`,XLSX.write(wb,{bookType:"xlsx",type:"array"}));
+
+// ---- PDF: each chosen product is a section; "one page" puts them all in one flow, "separate" starts each on its own page ----
+const exNote=c=>{const o=c.filter(r=>grams(r)==null&&mls(r)==null);return o.length?`<div style="font-size:11px;color:#555;margin:2px 0 6px">ไม่นับ ${o.length} แถวที่หน่วยไม่ใช่น้ำหนัก: ${esc([...new Set(o.map(r=>(r.n||"-")+" ("+(r.u||"ไม่มีหน่วย")+")"))].join(", "))}</div>`:""};
+const wtxtOf=c=>{const g=c.reduce((a,r)=>a+(grams(r)||0),0);return g?`${fq(g)} กรัม (${fq(g/1000)} กก.)`:"-"};
+function productBlock(name,rs){
+  const units=new Set(rs.map(r=>r.u.trim())),tot=rs.reduce((a,r)=>a+result(r),0);
+  const body=rs.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.n)}</td><td class="n">${fq(r.q)}</td><td>${esc(r.u)}</td>${cols.map(x=>`<td class="n">${fq(eff(r,x))}</td>`).join("")}<td class="n f">${fq(result(r))}</td></tr>`).join("");
+  return `<h2 style="margin:16px 0 6px">${esc(name)}</h2>
+  <table><thead><tr><th>#</th><th>ชื่อวัตถุดิบ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(x=>`<th>${esc(x.n)}<br><small>${OPS[x.op].l}</small></th>`).join("")}<th>ผลลัพธ์</th></tr></thead><tbody>${body}</tbody>
+  <tfoot><tr><td colspan="${4+cols.length}">รวม</td><td class="n">${units.size>1?"-":fq(tot)}</td></tr></tfoot></table>
+  <div style="margin:6px 0"><b>รวมน้ำหนัก ${esc(name)}:</b> ${wtxtOf(rs)}</div>${exNote(rs)}`;
+}
+function summaryBlock(c){
+  return `<h2 style="margin:16px 0 6px">รวมน้ำหนักทุกสูตรที่เลือก: ${wtxtOf(c)}</h2>${exNote(c)}
   <table><thead><tr><th>ชื่อสินค้า</th><th>จำนวนแถว</th><th>น้ำหนักรวม (กรัม)</th><th>กก.</th></tr></thead><tbody>${weightByProduct(c).map(x=>`<tr><td>${esc(x.p)}</td><td class="n">${x.c}</td><td class="n f">${x.g?fq(x.g):"-"}</td><td class="n">${x.g?fq(x.g/1000):"-"}</td></tr>`).join("")}</tbody></table>`;
+}
+function buildParts(c){
+  const head=`<h2>ตารางคำนวณวัตถุดิบ ${new Date().toLocaleDateString("th-TH")}</h2>`,list=byProduct(c);
+  const parts=$("expMode").value==="sep"
+    ?list.map((g,k)=>(k?"":head)+productBlock(g.name,g.rs)).concat([summaryBlock(c)])
+    :[head+list.map(g=>productBlock(g.name,g.rs)).join("")+summaryBlock(c)];
+  return parts;
+}
+async function renderPdf(parts){
   try{
     await (document.fonts&&document.fonts.ready);
-    const cv=await html2canvas($("pdfbox"),{scale:2,backgroundColor:"#ffffff"});
     const {jsPDF}=window.jspdf,pdf=new jsPDF({unit:"mm",format:"a4"});
-    const W=210,H=297,m=10,w=W-2*m,h=cv.height*w/cv.width,ph=H-2*m,pxPer=cv.height/h;let y=0;
-    while(y<h){const sh=Math.min(ph,h-y),part=document.createElement("canvas");
-      part.width=cv.width;part.height=Math.round(sh*pxPer);
-      part.getContext("2d").drawImage(cv,0,Math.round(y*pxPer),cv.width,part.height,0,0,cv.width,part.height);
-      if(y>0)pdf.addPage();pdf.addImage(part.toDataURL("image/jpeg",.92),"JPEG",m,m,w,sh);y+=ph}
+    const W=210,H=297,m=10,w=W-2*m,ph=H-2*m;let firstPage=true;
+    for(const html of parts){
+      $("pdfbox").innerHTML=html;
+      const cv=await html2canvas($("pdfbox"),{scale:2,backgroundColor:"#ffffff"});
+      const h=cv.height*w/cv.width,pxPer=cv.height/h;let y=0;
+      while(y<h){const sh=Math.min(ph,h-y),part=document.createElement("canvas");
+        part.width=cv.width;part.height=Math.round(sh*pxPer);
+        part.getContext("2d").drawImage(cv,0,Math.round(y*pxPer),cv.width,part.height,0,0,cv.width,part.height);
+        if(!firstPage)pdf.addPage();firstPage=false;pdf.addImage(part.toDataURL("image/jpeg",.92),"JPEG",m,m,w,sh);y+=ph}
+    }
     await saveFile(`ตารางคำนวณ_${stamp()}.pdf`,pdf.output("arraybuffer"));
   }catch(e){note("สร้าง PDF ไม่สำเร็จ ลองอีกครั้ง",false)}
   $("pdfbox").innerHTML="";
+}
+
+// ---- preview before download ----
+let pv=null;
+function openPreview(kind){
+  const c=chosen();if(!c.length){note("ยังไม่มีรายการ",false);return}
+  pv={kind,sheet:0};$("pvMode").value=$("expMode").value;$("pv").hidden=false;showPv();$("pvGo").focus()}
+function showXl(){
+  const names=pv.wb.SheetNames;
+  $("pvBody").innerHTML=`<div class="bar">${names.map((n,i)=>`<button data-sh="${i}" aria-pressed="${i===pv.sheet}" style="${i===pv.sheet?"background:var(--grn);color:var(--onacc)":""}">${esc(n)}</button>`).join("")}</div><div class="xp scroll">${XLSX.utils.sheet_to_html(pv.wb.Sheets[names[pv.sheet]],{header:"",footer:""})}</div>`}
+function showPv(){
+  const c=chosen(),sep=$("expMode").value==="sep",list=byProduct(c);
+  $("pvTitle").textContent=`ตัวอย่าง ${pv.kind==="pdf"?"PDF":"Excel"} · ${list.length} สูตร · ${c.length} แถว`;
+  if(pv.kind==="pdf"){
+    pv.parts=buildParts(c);
+    $("pvBody").innerHTML=pv.parts.map((h,i)=>`<div class="pvlab">${sep?`ส่วนที่ ${i+1} (เริ่มหน้าใหม่)`:"ต่อเนื่องในหน้าเดียว (ขึ้นหน้าใหม่เองเมื่อยาวเกิน A4)"}</div><div class="paper scroll">${h}</div>`).join("");
+    $("pvNote").textContent="ตรวจดูก่อน ถ้าถูกต้องกด ดาวน์โหลด";
+  }else{
+    pv.wb=buildXlsx(c);if(pv.sheet>=pv.wb.SheetNames.length)pv.sheet=0;showXl();
+    $("pvNote").textContent="ในตัวอย่างเห็นค่าที่คำนวณแล้ว ส่วนในไฟล์ Excel เป็นสูตรจริง";
+  }
+}
+$("xls").onclick=()=>openPreview("xls");
+$("pdf").onclick=()=>openPreview("pdf");
+$("pvMode").onchange=e=>{$("expMode").value=e.target.value;pv.sheet=0;showPv()};
+$("pvBody").addEventListener("click",e=>{const i=e.target.dataset.sh;if(i==null)return;pv.sheet=+i;showXl()});
+$("pvX").onclick=()=>{$("pv").hidden=true;pv=null};
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&pv){$("pv").hidden=true;pv=null}});
+$("pvGo").onclick=async()=>{
+  if(!pv)return;const k=pv.kind,parts=pv.parts,wb=pv.wb;
+  $("pv").hidden=true;pv=null;
+  if(k==="pdf")await renderPdf(parts);else saveXlsx(wb);
 };
 ensureProducts();
 drawTable();
