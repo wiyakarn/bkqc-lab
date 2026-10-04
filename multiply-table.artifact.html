@@ -645,7 +645,14 @@ function buildXlsx(c){
   }
   return wb;
 }
-const saveXlsx=wb=>saveFile(`ตารางคำนวณ_${stamp()}.xlsx`,XLSX.write(wb,{bookType:"xlsx",type:"array"}));
+// file names carry the chosen recipe names, e.g. "Pizza Sauce + Pizza Sauce Blend_2026-10-04.xlsx"
+function fileBase(){
+  const ns=byProduct(chosen()).map(g=>g.name.replace(/[\\\/:*?"<>|\[\]]/g," ").replace(/\s+/g," ").trim()).filter(Boolean);
+  if(!ns.length)return "ตารางคำนวณ";
+  let b=ns.join(" + ");if(b.length>70)b=ns.slice(0,2).join(" + ")+` และอีก ${ns.length-2} สูตร`;
+  return b.slice(0,100)+"_"+stamp();
+}
+const saveXlsx=wb=>saveFile(`${fileBase()}.xlsx`,XLSX.write(wb,{bookType:"xlsx",type:"array"}));
 
 // ---- PDF: each chosen product is a section; "one page" puts them all in one flow, "separate" starts each on its own page ----
 const exNote=c=>{const o=c.filter(r=>grams(r)==null&&mls(r)==null);return o.length?`<div style="font-size:11px;color:#555;margin:2px 0 6px">ไม่นับ ${o.length} แถวที่หน่วยไม่ใช่น้ำหนัก: ${esc([...new Set(o.map(r=>(r.n||"-")+" ("+(r.u||"ไม่มีหน่วย")+")"))].join(", "))}</div>`:""};
@@ -689,7 +696,7 @@ async function renderPdf(parts){
         part.getContext("2d").drawImage(cv,0,Math.round(y*pxPer),cv.width,part.height,0,0,cv.width,part.height);
         if(!firstPage)pdf.addPage();firstPage=false;pdf.addImage(part.toDataURL("image/jpeg",.92),"JPEG",m,m,w,sh);y+=ph}
     }
-    await saveFile(`ตารางคำนวณ_${stamp()}.pdf`,pdf.output("arraybuffer"));
+    await saveFile(`${fileBase()}.pdf`,pdf.output("arraybuffer"));
   }catch(e){note("สร้าง PDF ไม่สำเร็จ ลองอีกครั้ง",false)}
   $("pdfbox").innerHTML="";
 }
