@@ -59,6 +59,11 @@ tfoot td{background:var(--grn2);font-weight:700}
 
 <div class="card">
   <div class="bar">
+    <div style="min-width:180px;flex:1"><label for="curP">ชื่อสินค้า (ใช้กับแถวที่เพิ่มใหม่)</label><input type="text" id="curP" list="plist" placeholder="เช่น ข้าวผัดหมู" autocomplete="off"></div>
+    <div style="min-width:150px"><label for="fp">แสดงสินค้า</label><select id="fp" style="width:100%;padding:6px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"></select></div>
+    <datalist id="plist"></datalist>
+  </div>
+  <div class="bar">
     <button class="p" id="addRow">+ เพิ่มรายการ</button>
     <select id="newOp" aria-label="ฟังก์ชันของขั้นใหม่" style="width:auto;padding:7px"></select><button id="addCol">+ เพิ่มขั้นคำนวณ</button>
     <label class="chk"><input type="checkbox" id="all"> เลือกทั้งหมด</label>
@@ -75,9 +80,9 @@ tfoot td{background:var(--grn2);font-weight:700}
 </div>
 
 <div class="card">
-  <h2>รวมตามชื่อรายการ (เฉพาะที่เลือก ถ้าไม่เลือกจะรวมทั้งหมด)</h2>
+  <div class="bar"><h2 style="margin:0">รวมผลลัพธ์</h2><select id="gmode" aria-label="วิธีรวม" style="width:auto;padding:6px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"><option value="ing">รวมตามชื่อวัตถุดิบ (ทุกสินค้า)</option><option value="prod">แยกตามสินค้า</option></select><span class="cnt">เฉพาะที่เลือก ถ้าไม่เลือกจะรวมทั้งหมดที่แสดง</span></div>
   <div class="scroll"><table>
-    <thead><tr><th>ชื่อรายการ</th><th>หน่วย</th><th>จำนวนแถว</th><th>ผลลัพธ์รวม</th></tr></thead>
+    <thead id="ghead"></thead>
     <tbody id="grp"></tbody>
   </table></div>
 </div>
@@ -102,7 +107,7 @@ let cols=[],rows=[],sel=new Set(),pending=null,showDone=false;
 try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s){cols=s.cols||[];rows=s.rows||[];showDone=!!s.showDone}}catch(e){}
 if(!cols.length){
   cols=[{id:"c1",op:"mul",n:"จำนวนที่ผลิต",d:200},{id:"c2",op:"inc",n:"เผื่อสูญเสีย %",d:5},{id:"c3",op:"up",n:"ปัดเศษขึ้น",d:0}];
-  rows=[{id:1,n:"ข้าวสวย",q:200,u:"กรัม",m:{}},{id:2,n:"หมูสับ",q:60,u:"กรัม",m:{}},{id:3,n:"ไข่ไก่",q:0.5,u:"ฟอง",m:{c2:0}},{id:4,n:"กระเทียม",q:5,u:"กรัม",m:{}}];
+  rows=[{id:1,p:"ข้าวผัดหมู",n:"ข้าวสวย",q:200,u:"กรัม",m:{}},{id:2,p:"ข้าวผัดหมู",n:"หมูสับ",q:60,u:"กรัม",m:{}},{id:3,p:"ข้าวผัดหมู",n:"ไข่ไก่",q:0.5,u:"ฟอง",m:{c2:0}},{id:4,p:"กะเพราหมูสับ",n:"หมูสับ",q:80,u:"กรัม",m:{}},{id:5,p:"กะเพราหมูสับ",n:"ข้าวสวย",q:200,u:"กรัม",m:{}}];
 }
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({cols,rows,showDone}))}catch(e){}};
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -111,9 +116,11 @@ const L=n=>{let s="";n++;while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)
 // value of a step for a row: the row's own entry if filled, otherwise the column default, otherwise the function's neutral value
 const eff=(r,c)=>{const v=r.m[c.id];return (v!==undefined&&v!==null&&v!=="")?v:(c.d??OPS[c.op].d)};
 const result=r=>cols.reduce((a,c)=>OPS[c.op].f(a,eff(r,c)),r.q);
-const expr=(rowNo)=>cols.reduce((e,c,i)=>OPS[c.op].x(e,L(3+i)+rowNo),"B"+rowNo);
+const expr=(rowNo)=>cols.reduce((e,c,i)=>OPS[c.op].x(e,L(4+i)+rowNo),"C"+rowNo);
 // rows marked done are hidden and left out of totals and downloads unless "show done" is on
-const vis=()=>rows.filter(r=>showDone||!r.done);
+const NOP="(ไม่ระบุสินค้า)";
+let fprod="";
+const vis=()=>rows.filter(r=>(showDone||!r.done)&&(!fprod||(r.p||NOP)===fprod));
 const chosen=()=>sel.size?vis().filter(r=>sel.has(r.id)):vis();
 $("newOp").innerHTML=Object.entries(OPS).map(([k,o])=>`<option value="${k}">${o.l}</option>`).join("");
 function note(t,ok){$("msgt").textContent=t;$("msgok").hidden=!ok;$("msg").hidden=false}
@@ -121,20 +128,27 @@ $("msgno").onclick=()=>{pending=null;$("msg").hidden=true};
 $("msgok").onclick=()=>{if(pending)pending();pending=null;$("msg").hidden=true};
 
 // column letters on screen match the Excel export: A name, B amount, C unit, D.. multipliers, then result
-function drawTable(){
+function updProducts(redraw){
+  const ps=[...new Set(rows.map(r=>r.p||NOP))];
+  $("plist").innerHTML=ps.filter(x=>x!==NOP).map(x=>`<option value="${esc(x)}">`).join("");
+  const keep=ps.includes(fprod)?fprod:"";fprod=keep;
+  $("fp").innerHTML=`<option value="">ทุกสินค้า (${ps.length})</option>`+ps.map(x=>`<option value="${esc(x)}"${x===fprod?" selected":""}>${esc(x)}</option>`).join("");
+}
+function drawTable(){updProducts();
   const nc=cols.length;
-  $("head").innerHTML=`<tr><th class="grp" colspan="2">① รายชื่อวัตถุดิบ</th><th class="grp" colspan="2">② ปริมาณ</th><th class="grp" colspan="${Math.max(nc,1)}">③ ใส่ค่าคำนวณ (ทำเรียงซ้าย → ขวา)</th><th class="grp" colspan="2">④ ผลลัพธ์</th></tr>
-  <tr><th style="width:34px"></th><th>ชื่อวัตถุดิบ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(c=>`<th><input type="text" data-cn="${c.id}" value="${esc(c.n)}" aria-label="ชื่อขั้นคำนวณ"><select data-co="${c.id}" aria-label="ฟังก์ชัน">${Object.entries(OPS).map(([k,o])=>`<option value="${k}"${k===c.op?" selected":""}>${o.l}</option>`).join("")}</select><button class="d x" data-cdel="${c.id}" aria-label="ลบขั้น ${esc(c.n)}">ลบขั้นนี้</button></th>`).join("")||"<th>ยังไม่มีขั้นคำนวณ</th>"}<th>ผลลัพธ์</th><th style="width:110px"></th></tr>
-  <tr><th class="def" colspan="4">ค่าทุกแถว (ใช้เมื่อแถวนั้นเว้นว่าง)</th>${cols.map(c=>`<th class="def"><input type="number" data-cd="${c.id}" value="${c.d??""}" step="any" placeholder="${OPS[c.op].d}" aria-label="ค่าทุกแถว ${esc(c.n)}"></th>`).join("")||"<th class=\"def\"></th>"}<th class="def"></th><th class="def"></th></tr>`;
+  $("head").innerHTML=`<tr><th class="grp" colspan="3">① ชื่อสินค้า / รายชื่อวัตถุดิบ</th><th class="grp" colspan="2">② ปริมาณ</th><th class="grp" colspan="${Math.max(nc,1)}">③ ใส่ค่าคำนวณ (ทำเรียงซ้าย → ขวา)</th><th class="grp" colspan="2">④ ผลลัพธ์</th></tr>
+  <tr><th style="width:34px"></th><th>ชื่อสินค้า</th><th>ชื่อวัตถุดิบ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(c=>`<th><input type="text" data-cn="${c.id}" value="${esc(c.n)}" aria-label="ชื่อขั้นคำนวณ"><select data-co="${c.id}" aria-label="ฟังก์ชัน">${Object.entries(OPS).map(([k,o])=>`<option value="${k}"${k===c.op?" selected":""}>${o.l}</option>`).join("")}</select><button class="d x" data-cdel="${c.id}" aria-label="ลบขั้น ${esc(c.n)}">ลบขั้นนี้</button></th>`).join("")||"<th>ยังไม่มีขั้นคำนวณ</th>"}<th>ผลลัพธ์</th><th style="width:110px"></th></tr>
+  <tr><th class="def" colspan="5">ค่าทุกแถว (ใช้เมื่อแถวนั้นเว้นว่าง)</th>${cols.map(c=>`<th class="def"><input type="number" data-cd="${c.id}" value="${c.d??""}" step="any" placeholder="${OPS[c.op].d}" aria-label="ค่าทุกแถว ${esc(c.n)}"></th>`).join("")||"<th class=\"def\"></th>"}<th class="def"></th><th class="def"></th></tr>`;
   $("rows").innerHTML=vis().length?vis().map(r=>`<tr data-r="${r.id}" class="${sel.has(r.id)?"sel":""}${r.done?" done":""}">
     <td><input type="checkbox" data-id="${r.id}" ${sel.has(r.id)?"checked":""} aria-label="เลือก"></td>
+    <td><input type="text" data-f="p" data-r="${r.id}" list="plist" value="${esc(r.p||"")}" placeholder="ชื่อสินค้า" aria-label="ชื่อสินค้า" style="min-width:110px"></td>
     <td><input type="text" data-f="n" data-r="${r.id}" value="${esc(r.n)}" placeholder="พิมพ์ชื่อรายการ" aria-label="ชื่อรายการ"></td>
     <td><input type="number" data-f="q" data-r="${r.id}" value="${r.q||""}" min="0" step="any" aria-label="ปริมาณ"></td>
     <td><input type="text" data-f="u" data-r="${r.id}" value="${esc(r.u)}" style="min-width:60px" aria-label="หน่วย"></td>
     ${cols.map(c=>`<td><input type="number" data-m="${c.id}" data-r="${r.id}" value="${r.m[c.id]??""}" step="any" placeholder="${OPS[c.op].d}" aria-label="${esc(c.n)}"></td>`).join("")}
     <td class="n f" data-res="${r.id}"></td>
     <td style="white-space:nowrap"><button class="dn" data-done="${r.id}" aria-label="${r.done?"เรียกคืน":"เสร็จแล้ว"}">${r.done?"↩ เรียกคืน":"✓ เสร็จ"}</button> <button class="d x" data-rdel="${r.id}" aria-label="ลบรายการ">✕</button></td></tr>`).join("")
-    :`<tr><td colspan="${Math.max(cols.length,1)+5}" class="empty">${rows.length?"ทุกรายการเสร็จแล้ว (ซ่อนอยู่) ติ๊ก \"แสดงที่เสร็จแล้ว\" เพื่อดู":"ยังไม่มีรายการ กด \"+ เพิ่มรายการ\""}</td></tr>`;
+    :`<tr><td colspan="${Math.max(cols.length,1)+6}" class="empty">${rows.length?"ทุกรายการเสร็จแล้ว (ซ่อนอยู่) ติ๊ก \"แสดงที่เสร็จแล้ว\" เพื่อดู":"ยังไม่มีรายการ กด \"+ เพิ่มรายการ\""}</td></tr>`;
   refresh();
 }
 // live recalculation without rebuilding inputs (keeps cursor while typing)
@@ -152,17 +166,25 @@ function refresh(){
   $("doneBtn").disabled=!sel.size;$("doneBtn").hidden=sel.size>0&&[...sel].every(id=>rows.find(r=>r.id===id)?.done);
   $("undoBtn").hidden=!selDone;$("undoBtn").disabled=!selDone;
   const units=new Set(c.map(r=>r.u.trim())),tot=c.reduce((a,r)=>a+result(r),0);
-  const rc=L(3+cols.length);
-  $("foot").innerHTML=rows.length?`<tr><td></td><td colspan="${3+Math.max(cols.length,1)}">รวมผลลัพธ์ ${c.length} แถว${units.size>1?" (หน่วยต่างกัน ดูตารางรวมด้านล่าง)":""}</td><td class="n">${units.size>1?"-":fq(tot)}${fx&&units.size<=1?`<span class="fx">=SUM(${rc}2:${rc}${c.length+1})</span>`:""}</td><td></td></tr>`:"";
-  const g=new Map();c.forEach(r=>{const key=r.n.trim().toLowerCase()+"|"+r.u.trim();const x=g.get(key)||{n:r.n.trim(),u:r.u.trim(),c:0,t:0};x.c++;x.t+=result(r);g.set(key,x)});
-  $("grp").innerHTML=g.size?[...g.values()].map(x=>`<tr><td>${esc(x.n||"(ไม่มีชื่อ)")}</td><td>${esc(x.u)}</td><td class="n">${x.c}</td><td class="n f">${fq(x.t)}${fx?`<span class="fx">=SUMIFS(ผลลัพธ์, ชื่อ,"${esc(x.n)}")</span>`:""}</td></tr>`).join(""):`<tr><td colspan="4" class="empty">—</td></tr>`;
+  const rc=L(4+cols.length);
+  $("foot").innerHTML=rows.length?`<tr><td></td><td colspan="${4+Math.max(cols.length,1)}">รวมผลลัพธ์ ${c.length} แถว${units.size>1?" (หน่วยต่างกัน ดูตารางรวมด้านล่าง)":""}</td><td class="n">${units.size>1?"-":fq(tot)}${fx&&units.size<=1?`<span class="fx">=SUM(${rc}2:${rc}${c.length+1})</span>`:""}</td><td></td></tr>`:"";
+  const byProd=$("gmode").value==="prod";
+  const g=groupRows(c,byProd);
+  $("ghead").innerHTML=`<tr>${byProd?"<th>ชื่อสินค้า</th>":""}<th>ชื่อวัตถุดิบ</th><th>หน่วย</th><th>จำนวนแถว</th><th>ผลลัพธ์รวม</th></tr>`;
+  $("grp").innerHTML=g.length?g.map(x=>`<tr>${byProd?`<td>${esc(x.p)}</td>`:""}<td>${esc(x.n||"(ไม่มีชื่อ)")}</td><td>${esc(x.u)}</td><td class="n">${x.c}</td><td class="n f">${fq(x.t)}${fx?`<span class="fx">=SUMIFS(ผลลัพธ์, ${byProd?`สินค้า,"${esc(x.p)}", `:""}ชื่อ,"${esc(x.n)}")</span>`:""}</td></tr>`).join(""):`<tr><td colspan="5" class="empty">—</td></tr>`;
 }
+function groupRows(c,byProd){
+  const g=new Map();c.forEach(r=>{const p=r.p||NOP,key=(byProd?p.toLowerCase()+"|":"")+r.n.trim().toLowerCase()+"|"+r.u.trim();
+    const x=g.get(key)||{p,n:r.n.trim(),u:r.u.trim(),c:0,t:0};x.c++;x.t+=result(r);g.set(key,x)});
+  return [...g.values()];
+}
+$("gmode").onchange=refresh;
 $("fx").onchange=refresh;
 
 const num=v=>{const x=parseFloat(v);return isNaN(x)?undefined:x};
 $("rows").addEventListener("input",e=>{
   const t=e.target,id=+t.dataset.r;if(!id)return;const r=rows.find(x=>x.id===id);
-  if(t.dataset.f==="n"||t.dataset.f==="u")r[t.dataset.f]=t.value;
+  if(t.dataset.f==="n"||t.dataset.f==="u"||t.dataset.f==="p"){r[t.dataset.f]=t.value;if(t.dataset.f==="p")updProducts(false)}
   else if(t.dataset.f==="q")r.q=num(t.value)||0;
   else if(t.dataset.m){const v=num(t.value);if(v===undefined)delete r.m[t.dataset.m];else r.m[t.dataset.m]=v}
   save();refresh();
@@ -190,7 +212,8 @@ $("doneBtn").onclick=()=>setDone(new Set(sel),true);
 $("undoBtn").onclick=()=>setDone(new Set([...sel].filter(id=>rows.find(r=>r.id===id)?.done)),false);
 $("showDone").onchange=e=>{showDone=e.target.checked;save();drawTable()};
 $("rows").addEventListener("click",e=>{const id=e.target.dataset.done;if(!id)return;const r=rows.find(x=>x.id===+id);setDone(new Set([r.id]),!r.done)});
-$("addRow").onclick=()=>{rows.push({id:uid(),n:"",q:0,u:"",m:{}});save();drawTable();const i=document.querySelectorAll('[data-f="n"]');i[i.length-1].focus()};
+$("fp").onchange=e=>{fprod=e.target.value;drawTable()};
+$("addRow").onclick=()=>{const p=$("curP").value.trim()||(fprod&&fprod!==NOP?fprod:"");rows.push({id:uid(),p,n:"",q:0,u:"",m:{}});save();drawTable();const i=document.querySelectorAll('[data-f="n"]');i[i.length-1].focus()};
 $("addCol").onclick=()=>{const op=$("newOp").value;cols.push({id:"c"+uid(),op,n:OPS[op].l.replace(/^\S+\s/,"")+" "+(cols.length+1),d:OPS[op].d});save();drawTable()};
 
 // ---- downloads ----
@@ -203,34 +226,38 @@ async function saveFile(name,data){
 const stamp=()=>new Date().toISOString().slice(0,10);
 $("xls").onclick=()=>{
   const c=chosen();if(!c.length){note("ยังไม่มีรายการ",false);return}
-  const ws={},rc=L(3+cols.length);
-  ["ชื่อรายการ","ปริมาณ","หน่วย",...cols.map(x=>`${x.n} (${OPS[x.op].l})`),"ผลลัพธ์"].forEach((h,k)=>ws[L(k)+"1"]={t:"s",v:h});
+  const ws={},rc=L(4+cols.length);
+  ["ชื่อสินค้า","ชื่อวัตถุดิบ","ปริมาณ","หน่วย",...cols.map(x=>`${x.n} (${OPS[x.op].l})`),"ผลลัพธ์"].forEach((h,k)=>ws[L(k)+"1"]={t:"s",v:h});
   c.forEach((r,k)=>{const q=k+2;
-    ws["A"+q]={t:"s",v:r.n};ws["B"+q]={t:"n",v:r.q};ws["C"+q]={t:"s",v:r.u};
-    cols.forEach((x,i)=>ws[L(3+i)+q]={t:"n",v:eff(r,x)});
+    ws["A"+q]={t:"s",v:r.p||NOP};ws["B"+q]={t:"s",v:r.n};ws["C"+q]={t:"n",v:r.q};ws["D"+q]={t:"s",v:r.u};
+    cols.forEach((x,i)=>ws[L(4+i)+q]={t:"n",v:eff(r,x)});
     ws[rc+q]={t:"n",v:result(r),f:expr(q)}});
   const last=c.length+1,tr=last+1;
   ws["A"+tr]={t:"s",v:"รวมผลลัพธ์"};ws[rc+tr]={t:"n",v:c.reduce((a,r)=>a+result(r),0),f:`SUM(${rc}2:${rc}${last})`};
-  ws["!ref"]=`A1:${rc}${tr}`;ws["!cols"]=[{wch:30},{wch:12},{wch:10},...cols.map(()=>({wch:16})),{wch:16}];
-  const g=new Map();c.forEach(r=>{const key=r.n.trim().toLowerCase()+"|"+r.u.trim();const x=g.get(key)||{n:r.n.trim(),u:r.u.trim(),c:0,t:0};x.c++;x.t+=result(r);g.set(key,x)});
-  const s={"!cols":[{wch:30},{wch:10},{wch:12},{wch:16}]};
-  ["ชื่อรายการ","หน่วย","จำนวนแถว","ผลลัพธ์รวม"].forEach((h,k)=>s[L(k)+"1"]={t:"s",v:h});
-  const A=`คำนวณ!$A$2:$A$${last}`,C=`คำนวณ!$C$2:$C$${last}`,R=`คำนวณ!$${rc}$2:$${rc}$${last}`;
-  [...g.values()].forEach((x,k)=>{const q=k+2;
-    s["A"+q]={t:"s",v:x.n};s["B"+q]={t:"s",v:x.u};
-    s["C"+q]={t:"n",v:x.c,f:`COUNTIFS(${A},A${q},${C},B${q})`};
-    s["D"+q]={t:"n",v:x.t,f:`SUMIFS(${R},${A},A${q},${C},B${q})`}});
-  s["!ref"]=`A1:D${g.size+1}`;
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"คำนวณ");XLSX.utils.book_append_sheet(wb,s,"รวมตามชื่อ");
+  ws["!ref"]=`A1:${rc}${tr}`;ws["!cols"]=[{wch:22},{wch:26},{wch:12},{wch:10},...cols.map(()=>({wch:16})),{wch:16}];
+  const P=`คำนวณ!$A$2:$A$${last}`,N=`คำนวณ!$B$2:$B$${last}`,U=`คำนวณ!$D$2:$D$${last}`,R=`คำนวณ!$${rc}$2:$${rc}$${last}`;
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"คำนวณ");
+  [["รวมตามวัตถุดิบ",false],["แยกตามสินค้า",true]].forEach(([title,bp])=>{
+    const g=groupRows(c,bp),sh={"!cols":[{wch:22},{wch:26},{wch:10},{wch:12},{wch:16}]};
+    const H=bp?["ชื่อสินค้า","ชื่อวัตถุดิบ","หน่วย","จำนวนแถว","ผลลัพธ์รวม"]:["ชื่อวัตถุดิบ","หน่วย","จำนวนแถว","ผลลัพธ์รวม"];
+    H.forEach((h,k)=>sh[L(k)+"1"]={t:"s",v:h});
+    g.forEach((x,k)=>{const q=k+2;
+      if(bp){sh["A"+q]={t:"s",v:x.p};sh["B"+q]={t:"s",v:x.n};sh["C"+q]={t:"s",v:x.u};
+        sh["D"+q]={t:"n",v:x.c,f:`COUNTIFS(${P},A${q},${N},B${q},${U},C${q})`};
+        sh["E"+q]={t:"n",v:x.t,f:`SUMIFS(${R},${P},A${q},${N},B${q},${U},C${q})`}}
+      else{sh["A"+q]={t:"s",v:x.n};sh["B"+q]={t:"s",v:x.u};
+        sh["C"+q]={t:"n",v:x.c,f:`COUNTIFS(${N},A${q},${U},B${q})`};
+        sh["D"+q]={t:"n",v:x.t,f:`SUMIFS(${R},${N},A${q},${U},B${q})`}}});
+    sh["!ref"]=`A1:${L(H.length-1)}${g.length+1}`;XLSX.utils.book_append_sheet(wb,sh,title)});
   saveFile(`ตารางคำนวณ_${stamp()}.xlsx`,XLSX.write(wb,{bookType:"xlsx",type:"array"}));
 };
 $("pdf").onclick=async()=>{
   const c=chosen();if(!c.length){note("ยังไม่มีรายการ",false);return}
-  const body=c.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.n)}</td><td class="n">${fq(r.q)}</td><td>${esc(r.u)}</td>${cols.map(x=>`<td class="n">${fq(eff(r,x))}</td>`).join("")}<td class="n f">${fq(result(r))}</td></tr>`).join("");
+  const body=c.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.p||NOP)}</td><td>${esc(r.n)}</td><td class="n">${fq(r.q)}</td><td>${esc(r.u)}</td>${cols.map(x=>`<td class="n">${fq(eff(r,x))}</td>`).join("")}<td class="n f">${fq(result(r))}</td></tr>`).join("");
   const units=new Set(c.map(r=>r.u.trim())),tot=c.reduce((a,r)=>a+result(r),0);
   $("pdfbox").innerHTML=`<h2>ตารางคำนวณวัตถุดิบ ${new Date().toLocaleDateString("th-TH")}</h2>
-  <table><thead><tr><th>#</th><th>ชื่อรายการ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(x=>`<th>${esc(x.n)}<br><small>${OPS[x.op].l}</small></th>`).join("")}<th>ผลลัพธ์</th></tr></thead><tbody>${body}</tbody>
-  <tfoot><tr><td colspan="${4+cols.length}">รวม</td><td class="n">${units.size>1?"-":fq(tot)}</td></tr></tfoot></table>`;
+  <table><thead><tr><th>#</th><th>ชื่อสินค้า</th><th>ชื่อวัตถุดิบ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(x=>`<th>${esc(x.n)}<br><small>${OPS[x.op].l}</small></th>`).join("")}<th>ผลลัพธ์</th></tr></thead><tbody>${body}</tbody>
+  <tfoot><tr><td colspan="${5+cols.length}">รวม</td><td class="n">${units.size>1?"-":fq(tot)}</td></tr></tfoot></table>`;
   try{
     await (document.fonts&&document.fonts.ready);
     const cv=await html2canvas($("pdfbox"),{scale:2,backgroundColor:"#ffffff"});
