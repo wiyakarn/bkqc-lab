@@ -137,7 +137,7 @@ function updProducts(redraw){
 function drawTable(){updProducts();
   const nc=cols.length;
   $("head").innerHTML=`<tr><th class="grp" colspan="3">① ชื่อสินค้า / รายชื่อวัตถุดิบ</th><th class="grp" colspan="2">② ปริมาณ</th><th class="grp" colspan="${Math.max(nc,1)}">③ ใส่ค่าคำนวณ (ทำเรียงซ้าย → ขวา)</th><th class="grp" colspan="2">④ ผลลัพธ์</th></tr>
-  <tr><th style="width:34px"></th><th>ชื่อสินค้า</th><th>ชื่อวัตถุดิบ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(c=>`<th><input type="text" data-cn="${c.id}" value="${esc(c.n)}" aria-label="ชื่อขั้นคำนวณ"><select data-co="${c.id}" aria-label="ฟังก์ชัน">${Object.entries(OPS).map(([k,o])=>`<option value="${k}"${k===c.op?" selected":""}>${o.l}</option>`).join("")}</select><button class="d x" data-cdel="${c.id}" aria-label="ลบขั้น ${esc(c.n)}">ลบขั้นนี้</button></th>`).join("")||"<th>ยังไม่มีขั้นคำนวณ</th>"}<th>ผลลัพธ์</th><th style="width:110px"></th></tr>
+  <tr><th style="width:34px"></th><th>ชื่อสินค้า</th><th>ชื่อวัตถุดิบ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(c=>`<th><input type="text" data-cn="${c.id}" value="${esc(c.n)}" aria-label="ชื่อขั้นคำนวณ"><select data-co="${c.id}" aria-label="ฟังก์ชัน">${Object.entries(OPS).map(([k,o])=>`<option value="${k}"${k===c.op?" selected":""}>${o.l}</option>`).join("")}</select><button class="dn" data-cins="${c.id}" aria-label="แทรกขั้นใหม่ก่อน ${esc(c.n)}">＋ แทรกก่อน</button> <button class="d x" data-cdel="${c.id}" aria-label="ลบขั้น ${esc(c.n)}">ลบขั้นนี้</button></th>`).join("")||"<th>ยังไม่มีขั้นคำนวณ</th>"}<th>ผลลัพธ์</th><th style="width:170px"></th></tr>
   <tr><th class="def" colspan="5">ค่าทุกแถว (ใช้เมื่อแถวนั้นเว้นว่าง)</th>${cols.map(c=>`<th class="def"><input type="number" data-cd="${c.id}" value="${c.d??""}" step="any" placeholder="${OPS[c.op].d}" aria-label="ค่าทุกแถว ${esc(c.n)}"></th>`).join("")||"<th class=\"def\"></th>"}<th class="def"></th><th class="def"></th></tr>`;
   $("rows").innerHTML=vis().length?vis().map(r=>`<tr data-r="${r.id}" class="${sel.has(r.id)?"sel":""}${r.done?" done":""}">
     <td><input type="checkbox" data-id="${r.id}" ${sel.has(r.id)?"checked":""} aria-label="เลือก"></td>
@@ -147,7 +147,7 @@ function drawTable(){updProducts();
     <td><input type="text" data-f="u" data-r="${r.id}" value="${esc(r.u)}" style="min-width:60px" aria-label="หน่วย"></td>
     ${cols.map(c=>`<td><input type="number" data-m="${c.id}" data-r="${r.id}" value="${r.m[c.id]??""}" step="any" placeholder="${OPS[c.op].d}" aria-label="${esc(c.n)}"></td>`).join("")}
     <td class="n f" data-res="${r.id}"></td>
-    <td style="white-space:nowrap"><button class="dn" data-done="${r.id}" aria-label="${r.done?"เรียกคืน":"เสร็จแล้ว"}">${r.done?"↩ เรียกคืน":"✓ เสร็จ"}</button> <button class="d x" data-rdel="${r.id}" aria-label="ลบรายการ">✕</button></td></tr>`).join("")
+    <td style="white-space:nowrap"><button class="dn" data-ins="${r.id}" aria-label="แทรกแถวใหม่ใต้แถวนี้">＋ แทรก</button> <button class="dn" data-done="${r.id}" aria-label="${r.done?"เรียกคืน":"เสร็จแล้ว"}">${r.done?"↩ เรียกคืน":"✓ เสร็จ"}</button> <button class="d x" data-rdel="${r.id}" aria-label="ลบรายการ">✕</button></td></tr>`).join("")
     :`<tr><td colspan="${Math.max(cols.length,1)+6}" class="empty">${rows.length?"ทุกรายการเสร็จแล้ว (ซ่อนอยู่) ติ๊ก \"แสดงที่เสร็จแล้ว\" เพื่อดู":"ยังไม่มีรายการ กด \"+ เพิ่มรายการ\""}</td></tr>`;
   refresh();
 }
@@ -212,9 +212,16 @@ $("doneBtn").onclick=()=>setDone(new Set(sel),true);
 $("undoBtn").onclick=()=>setDone(new Set([...sel].filter(id=>rows.find(r=>r.id===id)?.done)),false);
 $("showDone").onchange=e=>{showDone=e.target.checked;save();drawTable()};
 $("rows").addEventListener("click",e=>{const id=e.target.dataset.done;if(!id)return;const r=rows.find(x=>x.id===+id);setDone(new Set([r.id]),!r.done)});
+function newCol(op,n){return{id:"c"+uid(),op,n:n||OPS[op].l.replace(/^\S+\s/,"")+" "+(cols.length+1),d:OPS[op].d}}
+// insert a blank row right below the clicked row (same product); insert a step before the clicked step, using the function picked next to "+ เพิ่มขั้นคำนวณ"
+$("rows").addEventListener("click",e=>{const id=e.target.dataset.ins;if(!id)return;
+  const i=rows.findIndex(r=>r.id===+id),nr={id:uid(),p:rows[i].p||"",n:"",q:0,u:"",m:{}};
+  rows.splice(i+1,0,nr);save();drawTable();const f=document.querySelector(`[data-r="${nr.id}"][data-f="n"]`);if(f)f.focus()});
+$("head").addEventListener("click",e=>{const id=e.target.dataset.cins;if(!id)return;
+  const i=cols.findIndex(c=>c.id===id);cols.splice(i,0,newCol($("newOp").value));save();drawTable()});
 $("fp").onchange=e=>{fprod=e.target.value;drawTable()};
 $("addRow").onclick=()=>{const p=$("curP").value.trim()||(fprod&&fprod!==NOP?fprod:"");rows.push({id:uid(),p,n:"",q:0,u:"",m:{}});save();drawTable();const i=document.querySelectorAll('[data-f="n"]');i[i.length-1].focus()};
-$("addCol").onclick=()=>{const op=$("newOp").value;cols.push({id:"c"+uid(),op,n:OPS[op].l.replace(/^\S+\s/,"")+" "+(cols.length+1),d:OPS[op].d});save();drawTable()};
+$("addCol").onclick=()=>{cols.push(newCol($("newOp").value));save();drawTable()};
 
 // ---- downloads ----
 async function saveFile(name,data){
