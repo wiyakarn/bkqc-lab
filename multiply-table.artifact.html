@@ -62,6 +62,9 @@ tfoot td{background:var(--grn2);font-weight:700}
     <div style="min-width:180px;flex:1"><label for="curP">ชื่อสินค้า (ใช้กับแถวที่เพิ่มใหม่)</label><input type="text" id="curP" list="plist" placeholder="เช่น ข้าวผัดหมู" autocomplete="off"></div>
     <div style="min-width:150px"><label for="fp">แสดงสินค้า</label><select id="fp" style="width:100%;padding:6px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"></select></div>
     <datalist id="plist"></datalist>
+    <button class="d" id="delProd" disabled>ลบสินค้าที่แสดง</button>
+    <button class="d" id="clearAll">ล้างทั้งหมด</button>
+    <button id="undoDel" hidden>↶ เลิกทำการลบ</button>
   </div>
   <div class="bar">
     <button class="p" id="addRow">+ เพิ่มรายการ</button>
@@ -126,6 +129,8 @@ const VU=[[/^(มล\.|มิลลิลิตร|ml|cc)$/i,1],[/^(ลิตร
 const fac=(u,t)=>{u=(u||"").trim();const m=t.find(x=>x[0].test(u));return m?m[1]:null};
 const grams=r=>{const f=fac(r.u,WU);return f==null?null:result(r)*f};
 const mls=r=>{const f=fac(r.u,VU);return f==null?null:result(r)*f};
+let undoStack=[];
+const snap=()=>{undoStack.push(JSON.stringify({cols,rows}));if(undoStack.length>20)undoStack.shift()};
 const NOP="(ไม่ระบุสินค้า)";
 let fprod="";
 const vis=()=>rows.filter(r=>(showDone||!r.done)&&(!fprod||(r.p||NOP)===fprod));
@@ -166,6 +171,7 @@ function refresh(){
     td.innerHTML=fq(result(r))+(fx?`<span class="fx">=${expr(k+2)}</span>`:"")});
   const c=chosen();
   const V=vis(),nd=rows.filter(r=>r.done).length;
+  $("undoDel").hidden=!undoStack.length;$("delProd").disabled=!fprod;
   sel.forEach(id=>{if(!V.some(r=>r.id===id))sel.delete(id)});
   $("cnt").textContent=(sel.size?`เลือก ${sel.size} จาก ${V.length} แถว`:`แสดง ${V.length} แถว`);
   $("doneN").textContent=nd?`(${nd})`:"";$("showDone").checked=showDone;
@@ -214,13 +220,13 @@ $("head").addEventListener("input",e=>{
 $("head").addEventListener("change",e=>{const id=e.target.dataset.co;if(!id)return;const c=cols.find(x=>x.id===id);c.op=e.target.value;c.d=OPS[c.op].d;save();drawTable()});
 $("head").addEventListener("click",e=>{const id=e.target.dataset.cdel;if(!id)return;
   const c=cols.find(x=>x.id===id);
-  pending=()=>{cols=cols.filter(x=>x.id!==id);rows.forEach(r=>delete r.m[id]);save();drawTable()};
+  pending=()=>{snap();cols=cols.filter(x=>x.id!==id);rows.forEach(r=>delete r.m[id]);save();drawTable()};
   note(`ลบขั้นคำนวณ "${c.n}" ใช่ไหม`,true)});
 $("rows").addEventListener("change",e=>{const id=e.target.dataset.id;if(id==null)return;e.target.checked?sel.add(+id):sel.delete(+id);
   e.target.closest("tr").classList.toggle("sel",e.target.checked);refresh()});
 $("rows").addEventListener("click",e=>{const id=e.target.dataset.rdel;if(!id)return;
-  pending=()=>{rows=rows.filter(r=>r.id!==+id);sel.delete(+id);save();drawTable()};note("ลบรายการนี้ใช่ไหม",true)});
-$("del").onclick=()=>{const ids=new Set(sel);pending=()=>{rows=rows.filter(r=>!ids.has(r.id));sel.clear();save();drawTable()};note(`ลบ ${ids.size} แถวที่เลือกใช่ไหม`,true)};
+  pending=()=>{snap();rows=rows.filter(r=>r.id!==+id);sel.delete(+id);save();drawTable()};note("ลบรายการนี้ใช่ไหม",true)});
+$("del").onclick=()=>{const ids=new Set(sel);pending=()=>{snap();rows=rows.filter(r=>!ids.has(r.id));sel.clear();save();drawTable()};note(`ลบ ${ids.size} แถวที่เลือกใช่ไหม`,true)};
 $("all").onchange=e=>{sel=e.target.checked?new Set(vis().map(r=>r.id)):new Set();drawTable()};
 const setDone=(ids,v)=>{rows.forEach(r=>{if(ids.has(r.id))r.done=v});ids.forEach(id=>sel.delete(id));save();drawTable()};
 $("doneBtn").onclick=()=>setDone(new Set(sel),true);
@@ -234,6 +240,13 @@ $("rows").addEventListener("click",e=>{const id=e.target.dataset.ins;if(!id)retu
   rows.splice(i+1,0,nr);save();drawTable();const f=document.querySelector(`[data-r="${nr.id}"][data-f="n"]`);if(f)f.focus()});
 $("head").addEventListener("click",e=>{const id=e.target.dataset.cins;if(!id)return;
   const i=cols.findIndex(c=>c.id===id);cols.splice(i,0,newCol($("newOp").value));save();drawTable()});
+$("delProd").onclick=()=>{const pn=fprod;if(!pn)return;
+  const ids=new Set(rows.filter(r=>(r.p||NOP)===pn).map(r=>r.id));
+  pending=()=>{snap();rows=rows.filter(r=>!ids.has(r.id));ids.forEach(id=>sel.delete(id));fprod="";save();drawTable()};
+  note(`ลบสินค้า "${pn}" และวัตถุดิบทั้ง ${ids.size} แถวใช่ไหม (เลิกทำได้)`,true)};
+$("clearAll").onclick=()=>{pending=()=>{snap();rows=[];cols=[];sel.clear();fprod="";save();drawTable()};
+  note("ล้างทั้งตาราง ทั้งแถวและขั้นคำนวณ ใช่ไหม (เลิกทำได้)",true)};
+$("undoDel").onclick=()=>{const t=undoStack.pop();if(!t)return;const o=JSON.parse(t);cols=o.cols;rows=o.rows;save();drawTable();note("เลิกทำการลบแล้ว",false)};
 $("fp").onchange=e=>{fprod=e.target.value;drawTable()};
 $("addRow").onclick=()=>{const p=$("curP").value.trim()||(fprod&&fprod!==NOP?fprod:"");rows.push({id:uid(),p,n:"",q:0,u:"",m:{}});save();drawTable();const i=document.querySelectorAll('[data-f="n"]');i[i.length-1].focus()};
 $("addCol").onclick=()=>{cols.push(newCol($("newOp").value));save();drawTable()};
