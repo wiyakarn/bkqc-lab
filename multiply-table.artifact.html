@@ -1,0 +1,214 @@
+<title>ตารางคูณอัตโนมัติ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap">
+<style>
+/* Layout: one working table. name | amount | unit | any number of multiplier columns | result */
+:root{--bg:#f4f3ef;--sur:#fff;--sur2:#fffdf5;--brd:#d0cec4;--tx:#1a1916;--tx2:#6b6860;--grn:#1d6f42;--grn2:#e8f3ed;--blu2:#e8f0fa;--red:#c0392b;--amb2:#fef8ec;--onacc:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17191a;--sur:#202324;--sur2:#2a2d2a;--brd:#3a3e3c;--tx:#ecebe6;--tx2:#a2a198;--grn:#4cb07e;--grn2:#1f3328;--blu2:#1f2d3f;--red:#ef7b6e;--amb2:#3a3220;--onacc:#10170f;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#17191a;--sur:#202324;--sur2:#2a2d2a;--brd:#3a3e3c;--tx:#ecebe6;--tx2:#a2a198;--grn:#4cb07e;--grn2:#1f3328;--blu2:#1f2d3f;--red:#ef7b6e;--amb2:#3a3220;--onacc:#10170f;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;font-family:Sarabun,"Noto Sans Thai",sans-serif;background:var(--bg);color:var(--tx);font-size:14px;line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;padding-inline:16px;padding-block:16px}
+h1{font-size:21px;margin:0 0 2px;color:var(--grn)}
+h2{font-size:15px;margin:0 0 8px}
+.sub{color:var(--tx2);font-size:12px;margin-bottom:12px}
+.card{background:var(--sur);border:1px solid var(--brd);border-radius:10px;padding:12px;margin-bottom:12px}
+label{font-size:11px;color:var(--tx2);display:block}
+input[type=text],input[type=number]{width:100%;min-width:70px;padding:6px 7px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)}
+button{font:inherit;padding:7px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--sur);color:var(--tx);cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--grn);outline-offset:1px}
+button.p{background:var(--grn);color:var(--onacc);border-color:var(--grn)}
+button.d{color:var(--red);border-color:var(--red)}
+button:disabled{opacity:.4;cursor:default}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+.bar .sp{flex:1}
+.chk{display:flex;gap:4px;align-items:center;font-size:13px;color:var(--tx)}
+.cnt{font-size:12px;color:var(--tx2)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th{background:var(--grn);color:var(--onacc);font-weight:600;padding:6px;font-size:12px;text-align:left;vertical-align:top}
+th input{background:var(--sur2);color:var(--tx);font-weight:600}
+th.def{background:var(--grn2);color:var(--tx2);font-weight:400;font-size:11px}
+td{border:1px solid var(--brd);padding:4px 6px;vertical-align:top}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+td.f{background:var(--blu2)}
+.fx{display:block;font:11px/1.2 ui-monospace,Menlo,monospace;color:var(--tx2);word-break:break-all}
+tr.sel td{background:var(--amb2)}tr.sel td.f{background:var(--blu2)}
+tfoot td{background:var(--grn2);font-weight:700}
+.empty{text-align:center;color:var(--tx2);padding:16px}
+.msg{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border-radius:8px;background:var(--amb2);border:1px solid var(--brd);margin-bottom:12px}
+.msg[hidden]{display:none}
+.msg span{flex:1;min-width:160px}
+.x{padding:1px 7px;border-radius:12px;font-size:12px;margin-top:4px}
+#pdfbox{position:fixed;left:-10000px;top:0;width:900px;padding:24px;background:#fff;color:#111;font-family:Sarabun,"Noto Sans Thai",sans-serif;font-size:13px}
+#pdfbox table{width:100%}#pdfbox th{background:#1d6f42;color:#fff}#pdfbox td{border-color:#bbb;color:#111;background:#fff}
+#pdfbox td.f{background:#e8f0fa}#pdfbox tfoot td{background:#e8f3ed}#pdfbox h2{color:#1d6f42;font-size:17px}
+</style>
+
+<div class="wrap">
+<h1>ตารางคูณอัตโนมัติ</h1>
+<div class="sub">พิมพ์ชื่อรายการ ใส่ปริมาณ แล้วเพิ่มช่องตัวคูณได้กี่ช่องก็ได้ ผลลัพธ์ = ปริมาณ × ตัวคูณทุกช่อง · ช่อง "ค่าทุกแถว" ใช้เป็นค่าอัตโนมัติ แถวไหนไม่กรอกจะใช้ค่านั้น · ข้อมูลเก็บในเบราว์เซอร์ของคุณ ข้อมูลที่เห็นตอนเปิดครั้งแรกเป็นตัวอย่าง</div>
+
+<div class="msg" id="msg" hidden><span id="msgt"></span><button class="d" id="msgok" hidden>ตกลง</button><button id="msgno">ปิด</button></div>
+
+<div class="card">
+  <div class="bar">
+    <button class="p" id="addRow">+ เพิ่มรายการ</button>
+    <button id="addCol">+ เพิ่มช่องตัวคูณ</button>
+    <label class="chk"><input type="checkbox" id="all"> เลือกทั้งหมด</label>
+    <span class="cnt" id="cnt"></span><span class="sp"></span>
+    <label class="chk"><input type="checkbox" id="fx" checked> แสดงสูตร</label>
+    <button class="d" id="del" disabled>ลบที่เลือก</button>
+    <button id="xls">⬇ Excel</button><button id="pdf">⬇ PDF</button>
+  </div>
+  <div class="scroll"><table>
+    <thead id="head"></thead><tbody id="rows"></tbody><tfoot id="foot"></tfoot>
+  </table></div>
+</div>
+
+<div class="card">
+  <h2>รวมตามชื่อรายการ (เฉพาะที่เลือก ถ้าไม่เลือกจะรวมทั้งหมด)</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>ชื่อรายการ</th><th>หน่วย</th><th>จำนวนแถว</th><th>ผลลัพธ์รวม</th></tr></thead>
+    <tbody id="grp"></tbody>
+  </table></div>
+</div>
+<div id="pdfbox"></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const KEY="multiplyTable.v1";
+let uidN=Date.now();const uid=()=>++uidN;
+let cols=[],rows=[],sel=new Set(),pending=null;
+try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s){cols=s.cols||[];rows=s.rows||[]}}catch(e){}
+if(!cols.length){
+  cols=[{id:"c1",n:"จำนวนที่ผลิต",d:200},{id:"c2",n:"เผื่อสูญเสีย (×)",d:1.05}];
+  rows=[{id:1,n:"ข้าวสวย",q:200,u:"กรัม",m:{}},{id:2,n:"หมูสับ",q:60,u:"กรัม",m:{}},{id:3,n:"ไข่ไก่",q:0.5,u:"ฟอง",m:{c2:1}},{id:4,n:"น้ำมันพืช",q:10,u:"มล.",m:{}}];
+}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({cols,rows}))}catch(e){}};
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fq=n=>n.toLocaleString("th-TH",{maximumFractionDigits:4});
+const L=n=>{let s="";n++;while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26)}return s};
+// effective multiplier: the row's own value if filled, otherwise the column's default (1 when empty)
+const eff=(r,c)=>{const v=r.m[c.id];return (v!==undefined&&v!==null&&v!=="")?v:(c.d??1)};
+const result=r=>cols.reduce((a,c)=>a*eff(r,c),r.q);
+const chosen=()=>sel.size?rows.filter(r=>sel.has(r.id)):rows;
+function note(t,ok){$("msgt").textContent=t;$("msgok").hidden=!ok;$("msg").hidden=false}
+$("msgno").onclick=()=>{pending=null;$("msg").hidden=true};
+$("msgok").onclick=()=>{if(pending)pending();pending=null;$("msg").hidden=true};
+
+// column letters on screen match the Excel export: A name, B amount, C unit, D.. multipliers, then result
+function drawTable(){
+  $("head").innerHTML=`<tr><th style="width:34px"></th><th>ชื่อรายการ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(c=>`<th><input type="text" data-cn="${c.id}" value="${esc(c.n)}" aria-label="ชื่อช่องตัวคูณ"><button class="d x" data-cdel="${c.id}" aria-label="ลบช่อง ${esc(c.n)}">ลบช่อง</button></th>`).join("")}<th>ผลลัพธ์</th><th style="width:44px"></th></tr>
+  <tr><th class="def" colspan="4">ค่าทุกแถว (ใช้เมื่อแถวนั้นเว้นว่าง)</th>${cols.map(c=>`<th class="def"><input type="number" data-cd="${c.id}" value="${c.d??""}" step="any" placeholder="1" aria-label="ค่าทุกแถว ${esc(c.n)}"></th>`).join("")}<th class="def"></th><th class="def"></th></tr>`;
+  $("rows").innerHTML=rows.length?rows.map(r=>`<tr data-r="${r.id}" class="${sel.has(r.id)?"sel":""}">
+    <td><input type="checkbox" data-id="${r.id}" ${sel.has(r.id)?"checked":""} aria-label="เลือก"></td>
+    <td><input type="text" data-f="n" data-r="${r.id}" value="${esc(r.n)}" placeholder="พิมพ์ชื่อรายการ" aria-label="ชื่อรายการ"></td>
+    <td><input type="number" data-f="q" data-r="${r.id}" value="${r.q||""}" min="0" step="any" aria-label="ปริมาณ"></td>
+    <td><input type="text" data-f="u" data-r="${r.id}" value="${esc(r.u)}" style="min-width:60px" aria-label="หน่วย"></td>
+    ${cols.map(c=>`<td><input type="number" data-m="${c.id}" data-r="${r.id}" value="${r.m[c.id]??""}" step="any" placeholder="${esc(String(c.d??1))}" aria-label="${esc(c.n)}"></td>`).join("")}
+    <td class="n f" data-res="${r.id}"></td>
+    <td><button class="d x" data-rdel="${r.id}" aria-label="ลบรายการ">✕</button></td></tr>`).join("")
+    :`<tr><td colspan="${cols.length+6}" class="empty">ยังไม่มีรายการ กด "+ เพิ่มรายการ"</td></tr>`;
+  refresh();
+}
+// live recalculation without rebuilding inputs (keeps cursor while typing)
+function refresh(){
+  const fx=$("fx").checked;
+  rows.forEach((r,k)=>{const td=document.querySelector(`[data-res="${r.id}"]`);if(!td)return;
+    td.innerHTML=fq(result(r))+(fx?`<span class="fx">=B${k+2}${cols.map((c,i)=>"*"+L(3+i)+(k+2)).join("")}</span>`:"")});
+  const c=chosen();
+  $("cnt").textContent=sel.size?`เลือก ${sel.size} จาก ${rows.length} แถว`:`ทั้งหมด ${rows.length} แถว`;
+  $("del").disabled=!sel.size;$("all").checked=rows.length>0&&sel.size===rows.length;
+  const units=new Set(c.map(r=>r.u.trim())),tot=c.reduce((a,r)=>a+result(r),0);
+  const rc=L(3+cols.length);
+  $("foot").innerHTML=rows.length?`<tr><td></td><td colspan="${3+cols.length}">รวมผลลัพธ์ ${c.length} แถว${units.size>1?" (หน่วยต่างกัน ดูตารางรวมด้านล่าง)":""}</td><td class="n">${units.size>1?"-":fq(tot)}${fx&&units.size<=1?`<span class="fx">=SUM(${rc}2:${rc}${c.length+1})</span>`:""}</td><td></td></tr>`:"";
+  const g=new Map();c.forEach(r=>{const key=r.n.trim().toLowerCase()+"|"+r.u.trim();const x=g.get(key)||{n:r.n.trim(),u:r.u.trim(),c:0,t:0};x.c++;x.t+=result(r);g.set(key,x)});
+  $("grp").innerHTML=g.size?[...g.values()].map(x=>`<tr><td>${esc(x.n||"(ไม่มีชื่อ)")}</td><td>${esc(x.u)}</td><td class="n">${x.c}</td><td class="n f">${fq(x.t)}${fx?`<span class="fx">=SUMIFS(ผลลัพธ์, ชื่อ,"${esc(x.n)}")</span>`:""}</td></tr>`).join(""):`<tr><td colspan="4" class="empty">—</td></tr>`;
+}
+$("fx").onchange=refresh;
+
+const num=v=>{const x=parseFloat(v);return isNaN(x)?undefined:x};
+$("rows").addEventListener("input",e=>{
+  const t=e.target,id=+t.dataset.r;if(!id)return;const r=rows.find(x=>x.id===id);
+  if(t.dataset.f==="n"||t.dataset.f==="u")r[t.dataset.f]=t.value;
+  else if(t.dataset.f==="q")r.q=num(t.value)||0;
+  else if(t.dataset.m){const v=num(t.value);if(v===undefined)delete r.m[t.dataset.m];else r.m[t.dataset.m]=v}
+  save();refresh();
+});
+$("head").addEventListener("input",e=>{
+  const t=e.target;
+  if(t.dataset.cn){cols.find(c=>c.id===t.dataset.cn).n=t.value}
+  if(t.dataset.cd){const c=cols.find(c=>c.id===t.dataset.cd);const v=num(t.value);c.d=v;refresh();
+    document.querySelectorAll(`[data-m="${c.id}"]`).forEach(i=>i.placeholder=String(v??1))}
+  save();
+});
+$("head").addEventListener("click",e=>{const id=e.target.dataset.cdel;if(!id)return;
+  const c=cols.find(x=>x.id===id);
+  pending=()=>{cols=cols.filter(x=>x.id!==id);rows.forEach(r=>delete r.m[id]);save();drawTable()};
+  note(`ลบช่องตัวคูณ "${c.n}" ใช่ไหม`,true)});
+$("rows").addEventListener("change",e=>{const id=e.target.dataset.id;if(id==null)return;e.target.checked?sel.add(+id):sel.delete(+id);
+  e.target.closest("tr").classList.toggle("sel",e.target.checked);refresh()});
+$("rows").addEventListener("click",e=>{const id=e.target.dataset.rdel;if(!id)return;
+  pending=()=>{rows=rows.filter(r=>r.id!==+id);sel.delete(+id);save();drawTable()};note("ลบรายการนี้ใช่ไหม",true)});
+$("del").onclick=()=>{const ids=new Set(sel);pending=()=>{rows=rows.filter(r=>!ids.has(r.id));sel.clear();save();drawTable()};note(`ลบ ${ids.size} แถวที่เลือกใช่ไหม`,true)};
+$("all").onchange=e=>{sel=e.target.checked?new Set(rows.map(r=>r.id)):new Set();drawTable()};
+$("addRow").onclick=()=>{rows.push({id:uid(),n:"",q:0,u:"",m:{}});save();drawTable();const i=document.querySelectorAll('[data-f="n"]');i[i.length-1].focus()};
+$("addCol").onclick=()=>{cols.push({id:"c"+uid(),n:"ตัวคูณ "+(cols.length+1),d:1});save();drawTable()};
+
+// ---- downloads ----
+async function saveFile(name,data){
+  let dl=null;try{dl=await claude.use("downloads")}catch(e){}
+  if(!dl){note("มุมมองนี้ดาวน์โหลดไฟล์ไม่ได้ ลองเปิดจากหน้า claude.ai",false);return}
+  try{await dl.save({filename:name,data});note("บันทึกไฟล์แล้ว: "+name,false)}
+  catch(e){if(e&&e.code!=="declined")note("ดาวน์โหลดไม่สำเร็จ ("+(e&&e.code||"error")+")",false)}
+}
+const stamp=()=>new Date().toISOString().slice(0,10);
+$("xls").onclick=()=>{
+  const c=chosen();if(!c.length){note("ยังไม่มีรายการ",false);return}
+  const ws={},rc=L(3+cols.length);
+  ["ชื่อรายการ","ปริมาณ","หน่วย",...cols.map(x=>x.n),"ผลลัพธ์"].forEach((h,k)=>ws[L(k)+"1"]={t:"s",v:h});
+  c.forEach((r,k)=>{const q=k+2;
+    ws["A"+q]={t:"s",v:r.n};ws["B"+q]={t:"n",v:r.q};ws["C"+q]={t:"s",v:r.u};
+    cols.forEach((x,i)=>ws[L(3+i)+q]={t:"n",v:eff(r,x)});
+    ws[rc+q]={t:"n",v:result(r),f:`B${q}`+cols.map((x,i)=>"*"+L(3+i)+q).join("")}});
+  const last=c.length+1,tr=last+1;
+  ws["A"+tr]={t:"s",v:"รวมผลลัพธ์"};ws[rc+tr]={t:"n",v:c.reduce((a,r)=>a+result(r),0),f:`SUM(${rc}2:${rc}${last})`};
+  ws["!ref"]=`A1:${rc}${tr}`;ws["!cols"]=[{wch:30},{wch:12},{wch:10},...cols.map(()=>({wch:16})),{wch:16}];
+  const g=new Map();c.forEach(r=>{const key=r.n.trim().toLowerCase()+"|"+r.u.trim();const x=g.get(key)||{n:r.n.trim(),u:r.u.trim(),c:0,t:0};x.c++;x.t+=result(r);g.set(key,x)});
+  const s={"!cols":[{wch:30},{wch:10},{wch:12},{wch:16}]};
+  ["ชื่อรายการ","หน่วย","จำนวนแถว","ผลลัพธ์รวม"].forEach((h,k)=>s[L(k)+"1"]={t:"s",v:h});
+  const A=`คำนวณ!$A$2:$A$${last}`,C=`คำนวณ!$C$2:$C$${last}`,R=`คำนวณ!$${rc}$2:$${rc}$${last}`;
+  [...g.values()].forEach((x,k)=>{const q=k+2;
+    s["A"+q]={t:"s",v:x.n};s["B"+q]={t:"s",v:x.u};
+    s["C"+q]={t:"n",v:x.c,f:`COUNTIFS(${A},A${q},${C},B${q})`};
+    s["D"+q]={t:"n",v:x.t,f:`SUMIFS(${R},${A},A${q},${C},B${q})`}});
+  s["!ref"]=`A1:D${g.size+1}`;
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"คำนวณ");XLSX.utils.book_append_sheet(wb,s,"รวมตามชื่อ");
+  saveFile(`ตารางคูณ_${stamp()}.xlsx`,XLSX.write(wb,{bookType:"xlsx",type:"array"}));
+};
+$("pdf").onclick=async()=>{
+  const c=chosen();if(!c.length){note("ยังไม่มีรายการ",false);return}
+  const body=c.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.n)}</td><td class="n">${fq(r.q)}</td><td>${esc(r.u)}</td>${cols.map(x=>`<td class="n">${fq(eff(r,x))}</td>`).join("")}<td class="n f">${fq(result(r))}</td></tr>`).join("");
+  const units=new Set(c.map(r=>r.u.trim())),tot=c.reduce((a,r)=>a+result(r),0);
+  $("pdfbox").innerHTML=`<h2>ตารางคูณ ${new Date().toLocaleDateString("th-TH")}</h2>
+  <table><thead><tr><th>#</th><th>ชื่อรายการ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(x=>`<th>${esc(x.n)}</th>`).join("")}<th>ผลลัพธ์</th></tr></thead><tbody>${body}</tbody>
+  <tfoot><tr><td colspan="${4+cols.length}">รวม</td><td class="n">${units.size>1?"-":fq(tot)}</td></tr></tfoot></table>`;
+  try{
+    await (document.fonts&&document.fonts.ready);
+    const cv=await html2canvas($("pdfbox"),{scale:2,backgroundColor:"#ffffff"});
+    const {jsPDF}=window.jspdf,pdf=new jsPDF({unit:"mm",format:"a4"});
+    const W=210,H=297,m=10,w=W-2*m,h=cv.height*w/cv.width,ph=H-2*m,pxPer=cv.height/h;let y=0;
+    while(y<h){const sh=Math.min(ph,h-y),part=document.createElement("canvas");
+      part.width=cv.width;part.height=Math.round(sh*pxPer);
+      part.getContext("2d").drawImage(cv,0,Math.round(y*pxPer),cv.width,part.height,0,0,cv.width,part.height);
+      if(y>0)pdf.addPage();pdf.addImage(part.toDataURL("image/jpeg",.92),"JPEG",m,m,w,sh);y+=ph}
+    await saveFile(`ตารางคูณ_${stamp()}.pdf`,pdf.output("arraybuffer"));
+  }catch(e){note("สร้าง PDF ไม่สำเร็จ ลองอีกครั้ง",false)}
+  $("pdfbox").innerHTML="";
+};
+drawTable();
+</script>
