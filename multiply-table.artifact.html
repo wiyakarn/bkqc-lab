@@ -16,8 +16,14 @@ h2{font-size:15px;margin:0 0 8px}
 .sub{color:var(--tx2);font-size:12px;margin-bottom:12px}
 .card{background:var(--sur);border:1px solid var(--brd);border-radius:10px;padding:12px;margin-bottom:12px}
 label{font-size:11px;color:var(--tx2);display:block}
-input[type=text],input[type=number]{width:100%;min-width:70px;padding:6px 7px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)}
-button{font:inherit;padding:7px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--sur);color:var(--tx);cursor:pointer}
+input[type=text],input[type=number]{width:100%;min-width:52px;padding:3px 5px;border:1px solid var(--brd);border-radius:5px;font:inherit;font-size:13px;line-height:1.3;background:var(--sur2);color:var(--tx)}
+/* table cells stay compact so a whole recipe fits on one screen */
+table input[type=number]{max-width:84px}
+[data-res]{min-width:160px}
+#rows input[data-f="n"]{min-width:120px}
+#rows input[data-f="u"]{max-width:64px;min-width:44px}
+#rows select,#ptbl input{font-size:13px}
+button{font:inherit;font-size:13px;padding:4px 9px;border:1px solid var(--brd);border-radius:6px;background:var(--sur);color:var(--tx);cursor:pointer}
 button:focus-visible,input:focus-visible{outline:2px solid var(--grn);outline-offset:1px}
 button.p{background:var(--grn);color:var(--onacc);border-color:var(--grn)}
 button.d{color:var(--red);border-color:var(--red)}
@@ -28,12 +34,12 @@ button:disabled{opacity:.4;cursor:default}
 .cnt{font-size:12px;color:var(--tx2)}
 .scroll{overflow-x:auto}
 table{border-collapse:collapse;width:100%}
-th{background:var(--grn);color:var(--onacc);font-weight:600;padding:6px;font-size:12px;text-align:left;vertical-align:top}
+th{background:var(--grn);color:var(--onacc);font-weight:600;padding:4px 5px;font-size:12px;text-align:left;vertical-align:top}
 th input{background:var(--sur2);color:var(--tx);font-weight:600}
 th.grp{background:var(--grn2);color:var(--grn);text-align:center;font-size:13px;border:1px solid var(--brd)}
-th select{width:100%;padding:5px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx);margin-top:4px}
+th select{width:100%;padding:2px 3px;border:1px solid var(--brd);border-radius:5px;font:inherit;font-size:12px;background:var(--sur2);color:var(--tx);margin-top:3px}
 th.def{background:var(--grn2);color:var(--tx2);font-weight:400;font-size:11px}
-td{border:1px solid var(--brd);padding:4px 6px;vertical-align:top}
+td{border:1px solid var(--brd);padding:2px 4px;vertical-align:top}
 td.n{text-align:right;font-variant-numeric:tabular-nums}
 td.f{background:var(--blu2)}
 .fx{display:block;font:11px/1.2 ui-monospace,Menlo,monospace;color:var(--tx2);word-break:break-all}
@@ -191,16 +197,50 @@ function backup(why,st){
 }
 let lastAutoBk=0;
 function save(){
+  const stored=readLocal();
+  if(stored&&stored.updated>updated&&core(stored)!==core(stateNow())){   // another tab saved a newer version since this tab last synced
+    backup("ข้อมูลหน้านี้ (ก่อนรวม)");backup("ข้อมูลจากอีกหน้าต่าง",stored);
+    const mg=mergeLatest(stored,stateNow());cols=mg.cols;rows=mg.rows;products=mg.products;ensureProducts();
+    setTimeout(()=>{drawTable();note("พบว่ามีการแก้ข้อมูลจากอีกหน้าต่าง จึงรวมข้อมูลให้แล้ว ไม่มีอะไรหาย ดูย้อนหลังที่ 🕘 ประวัติ / กู้คืน",false)},0);
+  }
   updated=Date.now();editedSinceSeed=true;
   try{localStorage.setItem(KEY,JSON.stringify({...stateNow(),updated}))}catch(e){setSt("บันทึกในเบราว์เซอร์ไม่ได้ ข้อมูลอาจหายเมื่อปิดหน้า","warn");return}
   if(Date.now()-lastAutoBk>5*60*1000){lastAutoBk=Date.now();backup("อัตโนมัติ")}
   if(cloudDoc&&cloudReady){setSt("กำลังบันทึก…","busy");clearTimeout(cloudTimer);cloudTimer=setTimeout(pushCloud,800)}
   else setSt("บันทึกอัตโนมัติในเบราว์เซอร์นี้แล้ว · "+hhmm());
 }
+function readLocal(){try{return JSON.parse(localStorage.getItem(KEY)||"null")}catch(e){return null}}
+// two versions of the same data: everything from both; where the same row/step/recipe exists in both, "mine" (the edit just made) wins
+function mergeLatest(stored,mine){
+  const by=(a,b,k)=>{const m=new Map();(a||[]).forEach(x=>m.set(x[k],x));(b||[]).forEach(x=>m.set(x[k],x));return [...m.values()]};
+  return{cols:by(stored.cols,mine.cols,"id"),rows:by(stored.rows,mine.rows,"id"),products:by(stored.products,mine.products,"name"),showDone:mine.showDone};
+}
+let cloudSeen=0;
+// pull in newer data written by another tab or device before this tab can overwrite it
+function syncFromStores(){
+  const st=readLocal();
+  if(st&&st.updated>updated&&core(st)!==core(stateNow())){
+    backup("ข้อมูลหน้านี้ (ก่อนอัปเดต)");adopt(st,st.updated);drawTable();setSt("อัปเดตข้อมูลล่าสุดจากอีกหน้าต่างแล้ว · "+hhmm())}
+  if(cloudDoc&&cloudReady&&!cloudBusy)cloudDoc.get().then(sn=>{
+    const d=sn.exists?sn.data():null;
+    if(d&&d.updated>updated&&d.updated>cloudSeen){const st2=JSON.parse(d.state);
+      if(core(st2)!==core(stateNow())){backup("ข้อมูลหน้านี้ (ก่อนอัปเดต)");backup("ข้อมูลจากอีกเครื่อง",st2);adopt(st2,d.updated);drawTable();setSt("อัปเดตข้อมูลล่าสุดจากบัญชีของคุณแล้ว · "+hhmm())}
+      cloudSeen=d.updated}}).catch(()=>{});
+}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)syncFromStores()});
+window.addEventListener("focus",syncFromStores);
+window.addEventListener("storage",e=>{if(e.key===KEY)syncFromStores()});
 async function pushCloud(){
   if(!cloudDoc||!cloudReady)return;if(cloudBusy){cloudDirty=true;return}
   cloudBusy=true;
-  try{await cloudDoc.set({state:JSON.stringify(stateNow()),updated,bk:JSON.stringify(backups.slice(0,12))});setSt("บันทึกอัตโนมัติแล้ว (บัญชีของคุณ ใช้ต่อได้ทุกเครื่อง) · "+hhmm())}
+  try{
+    const cur=await cloudDoc.get(),cd=cur.exists?cur.data():null;
+    if(cd&&cd.updated>cloudSeen&&cd.updated!==updated){            // the account copy changed after this tab last saw it: merge instead of overwrite
+      const st=JSON.parse(cd.state);
+      if(core(st)!==core(stateNow())){backup("ข้อมูลหน้านี้ (ก่อนรวม)");backup("ข้อมูลในบัญชี (ก่อนรวม)",st);
+        const mg=mergeLatest(st,stateNow());adopt(mg,Date.now());drawTable();note("พบการแก้ไขจากอีกเครื่อง จึงรวมข้อมูลให้แล้ว ไม่มีอะไรหาย",false)}
+    }
+    await cloudDoc.set({state:JSON.stringify(stateNow()),updated,bk:JSON.stringify(backups.slice(0,12))});cloudSeen=updated;setSt("บันทึกอัตโนมัติแล้ว (บัญชีของคุณ ใช้ต่อได้ทุกเครื่อง) · "+hhmm())}
   catch(e){setSt("บันทึกในเบราว์เซอร์นี้แล้ว แต่ยังบันทึกขึ้นบัญชีไม่สำเร็จ · "+hhmm(),"warn")}
   cloudBusy=false;if(cloudDirty){cloudDirty=false;pushCloud()}
 }
@@ -225,6 +265,7 @@ async function initCloud(){
     const doc=db.doc("data/users/"+id+"/calc");
     const snap=await doc.get(),d=snap.exists?snap.data():null;
     if(d&&d.bk){try{const seen=new Set(backups.map(b=>b.t));JSON.parse(d.bk).forEach(b=>{if(!seen.has(b.t))backups.push(b)});persistBackups()}catch(e){}}
+    cloudSeen=d?d.updated:0;
     const local=stateNow();
     if(!d){cloudDoc=doc;cloudReady=true;if(!seeded||editedSinceSeed){backup("เปิดหน้า");await pushCloud()}return}
     const st=JSON.parse(d.state);
@@ -294,7 +335,7 @@ function drawTable(){updProducts();
   const emptyRows=emptyP.map(n=>`<tr class="done"><td></td><td colspan="${Math.max(cols.length,1)+5}"><b>${esc(n)}</b> ยังไม่มีวัตถุดิบ <button class="dn" data-addto="${esc(n)}">＋ เพิ่มวัตถุดิบให้สูตรนี้</button></td></tr>`).join("");
   $("rows").innerHTML=(vis().length||emptyRows)?vis().map(r=>`<tr data-r="${r.id}" class="${sel.has(r.id)?"sel":""}${r.done?" done":""}">
     <td><input type="checkbox" data-id="${r.id}" ${sel.has(r.id)?"checked":""} aria-label="เลือก"></td>
-    <td><select data-f="p" data-r="${r.id}" aria-label="ชื่อสินค้า" style="min-width:110px">${products.map(x=>`<option value="${esc(x.name)}"${x.name===r.p?" selected":""}>${esc(x.name)}</option>`).join("")}</select></td>
+    <td><select data-f="p" data-r="${r.id}" aria-label="ชื่อสินค้า" style="min-width:100px;padding:2px 3px;font-size:13px;border:1px solid var(--brd);border-radius:5px;background:var(--sur2);color:var(--tx)">${products.map(x=>`<option value="${esc(x.name)}"${x.name===r.p?" selected":""}>${esc(x.name)}</option>`).join("")}</select></td>
     <td><input type="text" data-f="n" data-r="${r.id}" value="${esc(r.n)}" placeholder="พิมพ์ชื่อรายการ" aria-label="ชื่อรายการ"></td>
     <td><input type="number" data-f="q" data-r="${r.id}" value="${r.q||""}" min="0" step="any" aria-label="ปริมาณ"></td>
     <td><input type="text" data-f="u" data-r="${r.id}" value="${esc(r.u)}" style="min-width:60px" aria-label="หน่วย"></td>
