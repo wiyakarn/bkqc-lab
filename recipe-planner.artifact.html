@@ -46,6 +46,10 @@ tfoot td{background:var(--grn2);font-weight:700}
 .msg{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border-radius:8px;background:var(--amb2);border:1px solid var(--brd);margin-bottom:12px}
 .msg[hidden]{display:none}
 .msg span{flex:1;min-width:160px}
+.noprice .pc{display:none}.noprice .ing{grid-template-columns:2fr 1fr 1fr 1fr 34px}
+.how{border:1px solid var(--brd);background:var(--grn2);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:13px}
+.how b{color:var(--grn)}.how div+div{margin-top:3px}.how .ex{font-size:12px;color:var(--tx2)}
+.steps{font:12px/1.5 ui-monospace,Menlo,monospace;color:var(--tx2);white-space:normal}.steps span{display:block}
 .modes{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px}
 .modes button[aria-pressed="true"]{background:var(--grn);color:var(--onacc);border-color:var(--grn)}
 .bad{color:var(--red);font-weight:600}.sub3{font-size:12px;color:var(--tx2);margin:12px 0 6px}
@@ -66,15 +70,15 @@ td input[type=number].sk{width:96px}
 
 <div class="msg" id="msg" hidden><span id="msgt"></span><button class="d" id="msgok" hidden>ตกลง</button><button id="msgno">ปิด</button></div>
 
-<div class="card" id="recipeCard">
+<div class="card noprice" id="recipeCard">
   <h2><b>1</b> สร้างสูตร (ส่วนผสมต่อ 1 หน่วย)</h2>
   <div class="g g2" style="margin-bottom:10px">
     <div><label for="rn">ชื่อเมนู</label><input type="text" id="rn" placeholder="เช่น ข้าวผัดหมู" autocomplete="off"></div>
     <div><label for="ru">หน่วยที่ผลิต</label><input type="text" id="ru" placeholder="กล่อง / ถุง / ชุด" autocomplete="off" value="กล่อง"></div>
   </div>
-  <div class="ing ingh"><span>ส่วนผสม</span><span>ปริมาณ/หน่วย</span><span>หน่วยวัด</span><span>สูญเสีย %</span><span>ราคา/หน่วยวัด</span><span></span></div>
+  <div class="ing ingh"><span>ส่วนผสม</span><span>ปริมาณ/หน่วย</span><span>หน่วยวัด</span><span>สูญเสีย %</span><span class="pc">ราคา/หน่วยวัด</span><span></span></div>
   <div id="ings"></div>
-  <div class="bar"><button id="addIng">+ เพิ่มส่วนผสม</button><span class="sp"></span><button id="rClear">ล้างฟอร์ม</button><button class="p" id="rSave">บันทึกสูตร</button></div>
+  <div class="bar"><button id="addIng">+ เพิ่มส่วนผสม</button><label class="chk"><input type="checkbox" id="showP"> ใส่ราคา (ไม่บังคับ)</label><span class="sp"></span><button id="rClear">ล้างฟอร์ม</button><button class="p" id="rSave">บันทึกสูตร</button></div>
   <div class="tag">สูตรที่บันทึกแล้ว (กดชื่อเพื่อแก้ไข)</div>
   <div class="rcp" id="rlist"></div>
 </div>
@@ -101,10 +105,11 @@ td input[type=number].sk{width:96px}
   <h2><b>3</b> เลือกสิ่งที่ต้องการคำนวณ</h2>
   <div class="modes" id="modes" role="group" aria-label="เลือกสิ่งที่ต้องการคำนวณ">
     <button data-m="need" aria-pressed="true">วัตถุดิบที่ต้องใช้</button>
-    <button data-m="cost" aria-pressed="true">ต้นทุน</button>
     <button data-m="stock" aria-pressed="false">สต็อก / ขาดเท่าไร</button>
     <button data-m="max" aria-pressed="false">ผลิตได้สูงสุด</button>
+    <button data-m="cost" aria-pressed="false">ต้นทุน (ราคา)</button>
   </div>
+  <div class="how" id="how"></div>
   <div class="bar">
     <span class="cnt" id="ninfo"></span><span class="sp"></span>
     <label class="chk"><input type="checkbox" id="fx" checked> แสดงสูตร</label>
@@ -123,7 +128,7 @@ td input[type=number].sk{width:96px}
 const $=id=>document.getElementById(id);
 const KEY="recipePlan.v1";
 let uidN=Date.now();const uid=()=>++uidN;
-let recipes=[],orders=[],sel=new Set(),ed=[],editId=null,pending=null,stock={},modes={need:true,cost:true,stock:false,max:false};
+let recipes=[],orders=[],sel=new Set(),ed=[],editId=null,pending=null,stock={},modes={need:true,cost:false,stock:false,max:false};
 try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s){recipes=s.recipes||[];orders=s.orders||[];stock=s.stock||{};modes=Object.assign(modes,s.modes||{})}}catch(e){}
 if(!recipes.length){
   recipes=[
@@ -148,15 +153,17 @@ function drawEd(){
    <input type="number" data-k="${k}" data-f="a" value="${x.a||""}" min="0" step="any" aria-label="ปริมาณ">
    <input type="text" data-k="${k}" data-f="u" value="${esc(x.u)}" placeholder="กรัม" aria-label="หน่วยวัด">
    <input type="number" data-k="${k}" data-f="w" value="${x.w||""}" min="0" step="any" placeholder="0" aria-label="สูญเสีย">
-   <input type="number" data-k="${k}" data-f="p" value="${x.p||""}" min="0" step="any" placeholder="0" aria-label="ราคา">
+   <input type="number" class="pc" data-k="${k}" data-f="p" value="${x.p||""}" min="0" step="any" placeholder="0" aria-label="ราคา">
    <button class="d" data-rm="${k}" style="padding:4px" aria-label="ลบส่วนผสม">✕</button></div>`).join("");
 }
 $("ings").addEventListener("input",e=>{const k=e.target.dataset.k;if(k==null)return;const f=e.target.dataset.f;ed[+k][f]=(f==="n"||f==="u")?e.target.value:parseFloat(e.target.value)||0});
 $("ings").addEventListener("click",e=>{const k=e.target.dataset.rm;if(k==null)return;ed.splice(+k,1);if(!ed.length)ed.push(blank());drawEd()});
 const blank=()=>({n:"",a:0,u:"กรัม",w:0,p:0});
 $("addIng").onclick=()=>{ed.push(blank());drawEd();const i=$("ings").querySelectorAll('input[data-f="n"]');i[i.length-1].focus()};
-function clearEd(){editId=null;$("rn").value="";$("ru").value="กล่อง";ed=[blank(),blank(),blank()];drawEd();$("rSave").textContent="บันทึกสูตร"}
+function clearEd(){setPrice(false);editId=null;$("rn").value="";$("ru").value="กล่อง";ed=[blank(),blank(),blank()];drawEd();$("rSave").textContent="บันทึกสูตร"}
 $("rClear").onclick=clearEd;
+function setPrice(on){$("showP").checked=on;$("recipeCard").classList.toggle("noprice",!on)}
+$("showP").onchange=e=>setPrice(e.target.checked);
 $("rSave").onclick=()=>{
   const n=$("rn").value.trim();if(!n){note("ใส่ชื่อเมนูก่อน",false);$("rn").focus();return}
   const ings=ed.filter(x=>x.n.trim()&&x.a>0).map(x=>({n:x.n.trim(),a:x.a,u:(x.u||"").trim(),w:x.w||0,p:x.p||0}));
@@ -167,7 +174,7 @@ $("rSave").onclick=()=>{
 };
 $("rlist").addEventListener("click",e=>{
   const ee=e.target.dataset.edit,dd=e.target.dataset.del;
-  if(ee!=null){const r=rec(+ee);editId=r.id;$("rn").value=r.n;$("ru").value=r.u;ed=r.ings.map(x=>({...x}));drawEd();$("rSave").textContent="อัปเดตสูตร";$("recipeCard").scrollIntoView({block:"start"})}
+  if(ee!=null){const r=rec(+ee);editId=r.id;$("rn").value=r.n;$("ru").value=r.u;ed=r.ings.map(x=>({...x}));setPrice(r.ings.some(x=>x.p>0));drawEd();$("rSave").textContent="อัปเดตสูตร";$("recipeCard").scrollIntoView({block:"start"})}
   if(dd!=null){const r=rec(+dd);const used=orders.filter(o=>o.rid===r.id).length;
     pending=()=>{recipes=recipes.filter(x=>x.id!==r.id);orders=orders.filter(o=>o.rid!==r.id);save();render()};
     note(`ลบสูตร "${r.n}"${used?` และรายการสั่งผลิต ${used} รายการที่ใช้สูตรนี้`:""} ใช่ไหม`,true)}
@@ -197,9 +204,10 @@ function aggregate(list){
   const m=new Map();
   list.forEach(o=>{const r=rec(o.rid);r.ings.forEach(ing=>{
     const key=ing.n.toLowerCase()+"|"+ing.u;const need=lineNeed(ing,o.q);
-    const x=m.get(key)||{key,n:ing.n,u:ing.u,t:0,c:0};x.t+=need;x.c+=need*(ing.p||0);m.set(key,x)})});
+    const x=m.get(key)||{key,n:ing.n,u:ing.u,t:0,c:0,parts:[]};x.parts.push({m:r.n,a:ing.a,q:o.q,w:ing.w||0,v:need});x.t+=need;x.c+=need*(ing.p||0);m.set(key,x)})});
   return [...m.values()];
 }
+const steps=x=>x.parts.map(p=>`<span>${esc(p.m)}: ${fq(p.a)} × ${fq(p.q)}${p.w?` × ${fq(1+p.w/100)}`:""} = ${fq(p.v)}</span>`).join("")+(x.parts.length>1?`<span>รวม = ${x.parts.map(p=>fq(p.v)).join(" + ")} = ${fq(x.t)}</span>`:"");
 function conv(t,u){
   if(/^(กรัม|ก\.|g|gram)$/i.test(u)&&t>=1000)return fq(t/1000)+" กก.";
   if(/^(มล\.|ml|มิลลิลิตร)$/i.test(u)&&t>=1000)return fq(t/1000)+" ลิตร";
@@ -221,9 +229,10 @@ function render(){
   $("ninfo").textContent=c.length?`คำนวณจาก ${c.length} รายการ${sel.size?" ที่เลือก":" (ทั้งหมด)"}`:"ยังไม่มีรายการ";
   // columns follow the chosen calculations; formula text mirrors the Excel export
   const cols=[{h:"ส่วนผสม",f:x=>esc(x.n)}];
-  if(M.need)cols.push({h:"ต้องใช้รวม",cls:"n f",f:x=>fq(x.t)+(fx?`<span class="fx">=SUMIFS(ต้องใช้, ส่วนผสม,"${esc(x.n)}")</span>`:"")});
+  if(M.need)cols.push({h:"ต้องใช้รวม",cls:"n f",f:x=>"<b>"+fq(x.t)+"</b>"});
   cols.push({h:"หน่วย",f:x=>esc(x.u)});
   if(M.need)cols.push({h:"เทียบเป็น",f:x=>conv(x.t,x.u)});
+  if(M.need&&fx)cols.push({h:"วิธีคำนวณ (ปริมาณ × จำนวน × (1+สูญเสีย%))",cls:"steps",f:steps});
   if(M.cost)cols.push({h:"ต้นทุนโดยประมาณ",cls:"n",f:x=>x.c?fm(x.c):"-",foot:t=>t?fm(t):"-",sum:x=>x.c});
   if(showStock)cols.push({h:"มีอยู่ในสต็อก",f:x=>`<input type="number" class="sk" data-sk="${esc(x.key)}" value="${stock[x.key]??""}" min="0" step="any" placeholder="0" aria-label="สต็อก ${esc(x.n)}">`});
   if(M.stock)cols.push({h:"ขาด / เหลือ",cls:"n",f:x=>{const s=stock[x.key];if(s===undefined)return "—";const d=s-x.t;
@@ -232,6 +241,13 @@ function render(){
   $("nrows").innerHTML=agg.length?agg.map(x=>"<tr>"+cols.map(k=>`<td${k.cls?` class="${k.cls}"`:""}>${k.f(x)}</td>`).join("")+"</tr>").join("")
     :`<tr><td colspan="${cols.length}" class="empty">เพิ่มสูตรและรายการสั่งผลิตด้านบน</td></tr>`;
   $("nfoot").innerHTML=agg.length?"<tr>"+cols.map((k,i)=>i===0?`<td>รวม ${agg.length} รายการวัตถุดิบ</td>`:`<td${k.cls?` class="${k.cls}"`:""}>${k.sum?k.foot(agg.reduce((a,x)=>a+k.sum(x),0)):""}</td>`).join("")+"</tr>":"";
+  // formula explanation, one line per chosen calculation
+  const ex1=agg[0]&&agg[0].parts[0];let how="";
+  if(M.need)how+=`<div><b>ต้องใช้</b> = ปริมาณต่อ 1 หน่วย × จำนวนที่ผลิต × (1 + สูญเสีย% ÷ 100)${ex1?`<div class="ex">เช่น ${esc(agg[0].n)} ของ ${esc(ex1.m)} = ${fq(ex1.a)} × ${fq(ex1.q)}${ex1.w?` × ${fq(1+ex1.w/100)}`:""} = ${fq(ex1.v)} ${esc(agg[0].u)}</div>`:""}</div><div>ส่วนผสมเดียวกันจากหลายเมนู ระบบบวกรวมให้ (ชื่อและหน่วยต้องตรงกัน)</div>`;
+  if(M.stock)how+=`<div><b>ขาด / เหลือ</b> = สต็อกที่มี − ต้องใช้รวม (ติดลบ = ขาด)</div>`;
+  if(M.max)how+=`<div><b>ผลิตได้สูงสุด</b> = ค่าน้อยที่สุดของ [สต็อก ÷ (ปริมาณต่อ 1 หน่วย × (1 + สูญเสีย% ÷ 100))] จากทุกส่วนผสมในสูตร</div>`;
+  if(M.cost)how+=`<div><b>ต้นทุน</b> = ต้องใช้ × ราคาต่อหน่วยวัด · ต้นทุนต่อ 1 หน่วย = ต้นทุนรวม ÷ จำนวนที่ผลิต</div>`;
+  $("how").innerHTML=how||"เลือกสิ่งที่ต้องการคำนวณด้านบน";
   // extra sections
   let ex="";
   if(M.cost&&c.length){
@@ -263,16 +279,16 @@ async function saveFile(name,data){
 const stamp=()=>new Date().toISOString().slice(0,10);
 $("xls").onclick=()=>{
   const c=chosen();if(!c.length){note("ยังไม่มีรายการสั่งผลิต",false);return}
-  const d={},H=["เมนู","จำนวนผลิต","ส่วนผสม","ปริมาณ/หน่วย","หน่วยวัด","สูญเสีย %","ต้องใช้","ราคา/หน่วยวัด","ต้นทุน","หมายเหตุ"];
+  const d={},H=["เมนู","จำนวนผลิต","ส่วนผสม","ปริมาณ/หน่วย","หน่วยวัด","สูญเสีย %","ต้องใช้","หมายเหตุ"].concat(modes.cost?["ราคา/หน่วยวัด","ต้นทุน"]:[]);
   H.forEach((h,k)=>d[String.fromCharCode(65+k)+"1"]={t:"s",v:h});
   let r=2;
   c.forEach(o=>{const rc=rec(o.rid);rc.ings.forEach(ing=>{
     d["A"+r]={t:"s",v:rc.n};d["B"+r]={t:"n",v:o.q};d["C"+r]={t:"s",v:ing.n};d["D"+r]={t:"n",v:ing.a};
     d["E"+r]={t:"s",v:ing.u};d["F"+r]={t:"n",v:ing.w||0};
     d["G"+r]={t:"n",v:lineNeed(ing,o.q),f:`B${r}*D${r}*(1+F${r}/100)`};
-    d["H"+r]={t:"n",v:ing.p||0};d["I"+r]={t:"n",v:lineNeed(ing,o.q)*(ing.p||0),f:`G${r}*H${r}`,z:"#,##0.00"};
-    d["J"+r]={t:"s",v:o.note||""};r++})});
-  const last=r-1;d["!ref"]=`A1:J${last}`;d["!cols"]=[{wch:22},{wch:12},{wch:22},{wch:12},{wch:10},{wch:10},{wch:12},{wch:12},{wch:12},{wch:24}];
+    d["H"+r]={t:"s",v:o.note||""};
+    if(modes.cost){d["I"+r]={t:"n",v:ing.p||0};d["J"+r]={t:"n",v:lineNeed(ing,o.q)*(ing.p||0),f:`G${r}*I${r}`,z:"#,##0.00"}}r++})});
+  const last=r-1;d["!ref"]=`A1:${modes.cost?"J":"H"}${last}`;d["!cols"]=[{wch:22},{wch:12},{wch:22},{wch:12},{wch:10},{wch:10},{wch:12},{wch:24},{wch:12},{wch:12}];
   let cmSheet=null;const agg=aggregate(c),M=modes,sh={},L=n=>String.fromCharCode(65+n);
   const heads=["ส่วนผสม","หน่วยวัด","ต้องใช้รวม"];if(M.cost)heads.push("ต้นทุนโดยประมาณ");if(M.stock||M.max)heads.push("มีอยู่ในสต็อก");if(M.stock)heads.push("เหลือ (ติดลบ = ขาด)");
   heads.forEach((h,k)=>sh[L(k)+"1"]={t:"s",v:h});sh["!cols"]=heads.map((h,k)=>({wch:k?18:26}));
@@ -280,7 +296,7 @@ $("xls").onclick=()=>{
   agg.forEach((x,k)=>{const q=k+2;let i=3;
     sh["A"+q]={t:"s",v:x.n};sh["B"+q]={t:"s",v:x.u};
     sh["C"+q]={t:"n",v:x.t,f:`SUMIFS(${D("G")},${D("C")},A${q},${D("E")},B${q})`};
-    if(M.cost)sh[L(i++)+q]={t:"n",v:x.c,f:`SUMIFS(${D("I")},${D("C")},A${q},${D("E")},B${q})`,z:"#,##0.00"};
+    if(M.cost)sh[L(i++)+q]={t:"n",v:x.c,f:`SUMIFS(${D("J")},${D("C")},A${q},${D("E")},B${q})`,z:"#,##0.00"};
     if(M.stock||M.max){const sc=L(i++);sh[sc+q]={t:"n",v:stock[x.key]||0};
       if(M.stock)sh[L(i++)+q]={t:"n",v:(stock[x.key]||0)-x.t,f:`${sc}${q}-C${q}`}}});
   const t=agg.length+2;
@@ -294,7 +310,7 @@ $("xls").onclick=()=>{
     c.forEach(o=>{const rc=rec(o.rid),n=rc.ings.length,a=ri,b=ri+n-1,q=rr;
       cm["A"+q]={t:"s",v:rc.n};cm["B"+q]={t:"n",v:o.q};
       const tot=rc.ings.reduce((x,i)=>x+lineNeed(i,o.q)*(i.p||0),0);
-      cm["C"+q]={t:"n",v:tot,f:`SUM(รายละเอียด!$I$${a}:$I$${b})`,z:"#,##0.00"};
+      cm["C"+q]={t:"n",v:tot,f:`SUM(รายละเอียด!$J$${a}:$J$${b})`,z:"#,##0.00"};
       cm["D"+q]={t:"n",v:tot/o.q,f:`C${q}/B${q}`,z:"#,##0.00"};rr++;ri+=n});
     cm["!ref"]=`A1:D${rr-1}`;cmSheet=cm;
   }
@@ -308,12 +324,12 @@ $("pdf").onclick=async()=>{
   const c=chosen();if(!c.length){note("ยังไม่มีรายการสั่งผลิต",false);return}
   const agg=aggregate(c),tc=agg.reduce((s,x)=>s+x.c,0);
   const ords=c.map(o=>{const r=rec(o.rid);return `<tr><td>${esc(r.n)}</td><td class="n">${fq(o.q)}</td><td>${esc(r.u)}</td><td>${esc(o.note||"")}</td></tr>`}).join("");
-  const rows=agg.map(x=>`<tr><td>${esc(x.n)}</td><td class="n f">${fq(x.t)}</td><td>${esc(x.u)}</td><td>${conv(x.t,x.u)}</td>${modes.cost?`<td class="n">${x.c?fm(x.c):"-"}</td>`:""}${modes.stock?(()=>{const sv=stock[x.key];return `<td class="n">${sv===undefined?"":fq(sv)}</td><td class="n">${sv===undefined?"—":(sv-x.t<0?"ขาด "+fq(x.t-sv):"เหลือ "+fq(sv-x.t))}</td>`})():""}</tr>`).join("");
+  const rows=agg.map(x=>`<tr><td>${esc(x.n)}</td><td class="n f">${fq(x.t)}</td><td>${esc(x.u)}</td><td>${conv(x.t,x.u)}</td><td style="font-size:11px">${steps(x)}</td>${modes.cost?`<td class="n">${x.c?fm(x.c):"-"}</td>`:""}${modes.stock?(()=>{const sv=stock[x.key];return `<td class="n">${sv===undefined?"":fq(sv)}</td><td class="n">${sv===undefined?"—":(sv-x.t<0?"ขาด "+fq(x.t-sv):"เหลือ "+fq(sv-x.t))}</td>`})():""}</tr>`).join("");
   $("pdfbox").innerHTML=`<h2>ใบเตรียมวัตถุดิบ ${new Date().toLocaleDateString("th-TH")}</h2>
   <table><thead><tr><th>เมนูที่ผลิต</th><th>จำนวน</th><th>หน่วย</th><th>หมายเหตุ</th></tr></thead><tbody>${ords}</tbody></table>
   <h2 style="margin-top:18px">วัตถุดิบที่ต้องเตรียม</h2>
-  <table><thead><tr><th>ส่วนผสม</th><th>ต้องใช้รวม</th><th>หน่วย</th><th>เทียบเป็น</th>${modes.cost?"<th>ต้นทุนโดยประมาณ</th>":""}${modes.stock?"<th>มีอยู่</th><th>ขาด / เหลือ</th>":""}</tr></thead><tbody>${rows}</tbody>
-  ${modes.cost?`<tfoot><tr><td colspan="4">รวม</td><td class="n">${tc?fm(tc):"-"}</td>${modes.stock?"<td></td><td></td>":""}</tr></tfoot>`:""}</table>`;
+  <table><thead><tr><th>ส่วนผสม</th><th>ต้องใช้รวม</th><th>หน่วย</th><th>เทียบเป็น</th><th>วิธีคำนวณ</th>${modes.cost?"<th>ต้นทุนโดยประมาณ</th>":""}${modes.stock?"<th>มีอยู่</th><th>ขาด / เหลือ</th>":""}</tr></thead><tbody>${rows}</tbody>
+  ${modes.cost?`<tfoot><tr><td colspan="5">รวม</td><td class="n">${tc?fm(tc):"-"}</td>${modes.stock?"<td></td><td></td>":""}</tr></tfoot>`:""}</table>`;
   try{
     await (document.fonts&&document.fonts.ready);
     const cv=await html2canvas($("pdfbox"),{scale:2,backgroundColor:"#ffffff"});
