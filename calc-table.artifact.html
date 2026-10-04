@@ -37,6 +37,10 @@ tr.sel td{background:var(--amb2)}tr.sel td.f{background:var(--blu3)}
 tfoot td{background:var(--grn2);font-weight:700}
 h2{font-size:15px;margin:0 0 8px}
 .empty{text-align:center;color:var(--tx2);padding:18px}
+.sc{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;align-items:end;margin-bottom:6px}.sc>*{min-width:0}.presets{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.row{display:flex;gap:6px}
+.pf{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end;margin-bottom:10px}.pf>*{min-width:0}.pf .w2{grid-column:span 2}.pf .w3{grid-column:span 3}
+@media(max-width:700px){.pf .w2,.pf .w3{grid-column:1/-1}}
+.sub2{display:block;font-size:11px;color:var(--tx2)}
 .msg{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border-radius:8px;background:var(--amb2);border:1px solid var(--brd);margin-bottom:8px}
 .msg[hidden]{display:none}
 .msg span{flex:1;min-width:160px}
@@ -48,12 +52,38 @@ h2{font-size:15px;margin:0 0 8px}
 <div class="wrap">
 <h1>ตารางคำนวณสูตรอัตโนมัติ</h1>
 <div class="sub">พิมพ์ชื่อสินค้า แล้วระบบคำนวณยอดให้ · ติ๊กเลือกหลายรายการเพื่อรวม ลบ หรือดาวน์โหลด · ข้อมูลเก็บในเบราว์เซอร์ของคุณเอง</div>
+<div class="card" id="prodbox">
+  <h2>สร้างชื่อสินค้า และรายละเอียด</h2>
+  <div class="pf">
+    <div class="w2"><label for="pn">ชื่อสินค้า</label><input type="text" id="pn" placeholder="เช่น FRENCH FRIES 10MM 2.5KG" autocomplete="off"></div>
+    <div><label for="pc">รหัส / SKU</label><input type="text" id="pc" autocomplete="off"></div>
+    <div><label for="pu">หน่วย</label><input type="text" id="pu" placeholder="กก. / ถุง / ลัง" autocomplete="off"></div>
+    <div><label for="pp">ราคามาตรฐาน</label><input type="number" id="pp" min="0" step="any" value="0"></div>
+    <div class="w3"><label for="pd">รายละเอียด</label><input type="text" id="pd" placeholder="ขนาด แบรนด์ ซัพพลายเออร์ หมายเหตุ" autocomplete="off"></div>
+    <button class="p" id="pSave">บันทึกสินค้า</button>
+  </div>
+  <div class="scroll"><table>
+    <thead><tr><th>ชื่อสินค้า</th><th>รหัส</th><th>หน่วย</th><th>ราคา</th><th>รายละเอียด</th><th style="width:90px"></th></tr></thead>
+    <tbody id="plist"></tbody>
+  </table></div>
+</div>
 <div class="card add">
   <div><label for="n">ชื่อสินค้า</label><input type="text" id="n" list="names" placeholder="พิมพ์หรือเลือกชื่อสินค้า" autocomplete="off"><datalist id="names"></datalist></div>
   <div><label for="q">จำนวน</label><input type="number" id="q" min="0" step="any" value="1"></div>
   <div><label for="p">ราคา/หน่วย</label><input type="number" id="p" min="0" step="any" value="0"></div>
   <div><label for="d">ส่วนลด %</label><input type="number" id="d" min="0" max="100" step="any" value="0"></div>
   <button class="p" id="addBtn">+ เพิ่ม</button>
+</div>
+<div class="card" id="scalebox">
+  <h2>ปรับสูตร ย่อหรือขยาย</h2>
+  <div class="sc">
+    <div class="presets"><span class="cnt">สัดส่วน:</span>
+      <button data-k="0.25">¼</button><button data-k="0.5">½</button><button data-k="1">×1</button><button data-k="2">×2</button><button data-k="5">×5</button><button data-k="10">×10</button></div>
+    <div><label for="k">ตัวคูณ (ใช้กับทุกรายการ)</label><input type="number" id="k" min="0" step="any" value="1"></div>
+    <div><label for="div">หารเป็นกี่ชุด</label><div class="row"><input type="number" id="div" min="1" step="1" value="2"><button id="divBtn">หาร</button></div></div>
+    <div><label for="tgt">ตั้งเป้าจำนวนรวมใหม่ (ของรายการที่เลือก)</label><div class="row"><input type="number" id="tgt" min="0" step="any" placeholder="เช่น 500"><button id="tgtBtn">ปรับ</button></div></div>
+  </div>
+  <div class="cnt" id="kinfo"></div>
 </div>
 <div class="card">
   <div class="msg" id="msg" hidden><span id="msgt"></span><button class="d" id="msgok" hidden>ลบเลย</button><button id="msgno">ปิด</button></div>
@@ -66,7 +96,7 @@ h2{font-size:15px;margin:0 0 8px}
     <button id="pdf">⬇ PDF</button>
   </div>
   <div class="scroll"><table>
-    <thead><tr><th style="width:34px"></th><th>#</th><th>ชื่อสินค้า</th><th>จำนวน</th><th>ราคา/หน่วย</th><th>ส่วนลด %</th><th>รวม (คำนวณ)</th><th style="width:50px"></th></tr></thead>
+    <thead><tr><th style="width:34px"></th><th>#</th><th>ชื่อสินค้า</th><th>จำนวนตั้งต้น</th><th>ราคา/หน่วย</th><th>ส่วนลด %</th><th>จำนวนที่ปรับ</th><th>รวม (คำนวณ)</th><th style="width:50px"></th></tr></thead>
     <tbody id="rows"></tbody><tfoot id="foot"></tfoot>
   </table></div>
 </div>
@@ -82,46 +112,75 @@ h2{font-size:15px;margin:0 0 8px}
 <script>
 const $=id=>document.getElementById(id);
 const KEY="calcTable.v1";
-let items=[],sel=new Set(),pendingDel=null;
+let items=[],sel=new Set(),pendingDel=null,K=1;
+try{K=parseFloat(localStorage.getItem("calcTable.k"))||1}catch(e){}
 try{items=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){}
-if(!items.length)items=[{id:1,n:"ตัวอย่าง: ข้าวโพดหวาน",q:2,p:45,d:0},{id:2,n:"ตัวอย่าง: มันฝรั่งทอด",q:3,p:120,d:10},{id:3,n:"ตัวอย่าง: ข้าวโพดหวาน",q:1,p:45,d:0}];
+let products=[];try{products=JSON.parse(localStorage.getItem("calcTable.products")||"[]")}catch(e){}
+if(!products.length)products=[{n:"ตัวอย่าง: ข้าวโพดหวาน",c:"EX-001",u:"กก.",p:45,ds:"ข้าวโพดหวานแช่แข็ง ถุงละ 1 กก."},{n:"ตัวอย่าง: มันฝรั่งทอด",c:"EX-002",u:"ถุง",p:120,ds:"เฟรนช์ฟรายส์ 10 มม. ถุงละ 2.5 กก."}];
+if(!items.length)items=[{id:1,n:products[0].n,c:products[0].c,u:products[0].u,ds:products[0].ds,q:2,p:45,d:0},{id:2,n:products[1].n,c:products[1].c,u:products[1].u,ds:products[1].ds,q:3,p:120,d:10},{id:3,n:products[0].n,c:products[0].c,u:products[0].u,ds:products[0].ds,q:1,p:45,d:0}];
+const saveP=()=>{try{localStorage.setItem("calcTable.products",JSON.stringify(products))}catch(e){}};
+const detail=i=>[i.c,i.u,i.ds].filter(Boolean).join(" · ");
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(items))}catch(e){}};
 const fmt=n=>n.toLocaleString("th-TH",{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtq=n=>n.toLocaleString("th-TH",{maximumFractionDigits:4});
-const total=i=>i.q*i.p*(1-i.d/100);
+const total=i=>i.q*K*i.p*(1-i.d/100);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const chosen=()=>sel.size?items.filter(i=>sel.has(i.id)):items;
 
+function renderP(){
+  $("plist").innerHTML=products.length?products.map((x,k)=>`<tr><td>${esc(x.n)}</td><td>${esc(x.c||"")}</td><td>${esc(x.u||"")}</td><td class="n">${fmt(x.p||0)}</td><td>${esc(x.ds||"")}</td><td><button data-pe="${k}" style="padding:2px 8px">แก้ไข</button> <button data-pd="${k}" class="d" style="padding:2px 8px">✕</button></td></tr>`).join(""):`<tr><td colspan="6" class="empty">ยังไม่มีสินค้า สร้างด้านบน</td></tr>`;
+}
 function render(){
-  const showFx=$("fx").checked;
-  $("names").innerHTML=[...new Set(items.map(i=>i.n))].map(n=>`<option value="${esc(n)}">`).join("");
+  const showFx=$("fx").checked;renderP();
+  $("names").innerHTML=[...new Set(products.map(x=>x.n).concat(items.map(i=>i.n)))].map(n=>`<option value="${esc(n)}">`).join("");
   $("rows").innerHTML=items.length?items.map((it,k)=>{
     const r=k+2;
     return `<tr class="${sel.has(it.id)?"sel":""}">
       <td class="hidecol"><input type="checkbox" data-id="${it.id}" ${sel.has(it.id)?"checked":""}></td>
-      <td>${k+1}</td><td>${esc(it.n)}</td>
+      <td>${k+1}</td><td>${esc(it.n)}${detail(it)?`<span class="sub2">${esc(detail(it))}</span>`:""}</td>
       <td class="n">${fmtq(it.q)}</td><td class="n">${fmt(it.p)}</td><td class="n">${fmtq(it.d)}</td>
-      <td class="n f">${fmt(total(it))}${showFx?`<span class="fx">=B${r}*C${r}*(1-D${r}/100)</span>`:""}</td>
+      <td class="n f">${fmtq(it.q*K)}${showFx?`<span class="fx">=B${r}*$H$1</span>`:""}</td>
+      <td class="n f">${fmt(total(it))}${showFx?`<span class="fx">=E${r}*C${r}*(1-D${r}/100)</span>`:""}</td>
       <td class="hidecol"><button data-del="${it.id}" class="d" style="padding:2px 8px">✕</button></td></tr>`}).join("")
-    :`<tr><td colspan="8" class="empty">ยังไม่มีรายการ — เพิ่มสินค้าด้านบน</td></tr>`;
+    :`<tr><td colspan="9" class="empty">ยังไม่มีรายการ — เพิ่มสินค้าด้านบน</td></tr>`;
   const all=items.length;
   const sumAll=items.reduce((s,i)=>s+total(i),0);
-  $("foot").innerHTML=all?`<tr><td class="hidecol"></td><td colspan="2">รวมทั้งหมด ${all} รายการ</td><td class="n">${fmtq(items.reduce((s,i)=>s+i.q,0))}</td><td></td><td></td><td class="n">${fmt(sumAll)}${showFx?`<span class="fx">=SUM(E2:E${all+1})</span>`:""}</td><td class="hidecol"></td></tr>`:"";
+  $("foot").innerHTML=all?`<tr><td class="hidecol"></td><td colspan="2">รวมทั้งหมด ${all} รายการ</td><td class="n">${fmtq(items.reduce((s,i)=>s+i.q,0))}</td><td></td><td></td><td class="n">${fmtq(items.reduce((s,i)=>s+i.q*K,0))}</td><td class="n">${fmt(sumAll)}${showFx?`<span class="fx">=SUM(F2:F${all+1})</span>`:""}</td><td class="hidecol"></td></tr>`:"";
   $("cnt").textContent=sel.size?`เลือก ${sel.size} จาก ${all} รายการ`:`ทั้งหมด ${all} รายการ`;
   $("del").disabled=!sel.size;
   $("all").checked=all>0&&sel.size===all;
   // group summary
   const c=chosen(),g={};
-  c.forEach(i=>{const x=g[i.n]||(g[i.n]={n:i.n,c:0,q:0,t:0});x.c++;x.q+=i.q;x.t+=total(i)});
+  c.forEach(i=>{const x=g[i.n]||(g[i.n]={n:i.n,c:0,q:0,t:0});x.c++;x.q+=i.q*K;x.t+=total(i)});
   const gs=Object.values(g);
   $("grp").innerHTML=gs.length?gs.map(x=>`<tr><td>${esc(x.n)}</td><td class="n">${x.c}</td><td class="n">${fmtq(x.q)}</td><td class="n f">${fmt(x.t)}${showFx?`<span class="fx">=SUMIF(ชื่อสินค้า,"${esc(x.n)}",รวม)</span>`:""}</td></tr>`).join(""):`<tr><td colspan="4" class="empty">—</td></tr>`;
-  $("gfoot").innerHTML=gs.length?`<tr><td>รวม</td><td class="n">${c.length}</td><td class="n">${fmtq(c.reduce((s,i)=>s+i.q,0))}</td><td class="n">${fmt(c.reduce((s,i)=>s+total(i),0))}</td></tr>`:"";
+  $("gfoot").innerHTML=gs.length?`<tr><td>รวม</td><td class="n">${c.length}</td><td class="n">${fmtq(c.reduce((s,i)=>s+i.q*K,0))}</td><td class="n">${fmt(c.reduce((s,i)=>s+total(i),0))}</td></tr>`:"";
+  $("k").value=K;
+  $("kinfo").textContent=K===1?"ตอนนี้ใช้สูตรตั้งต้น (×1)":`ตอนนี้ปรับสูตร ×${fmtq(K)} (${K<1?"ย่อเป็นสูตรเล็ก":"ขยายเป็นสูตรใหญ่"}) จำนวนและยอดรวมคูณให้อัตโนมัติ`;
 }
+function setK(v){if(!(v>0)){note("ตัวคูณต้องมากกว่า 0",false);return}K=v;try{localStorage.setItem("calcTable.k",String(K))}catch(e){}render()}
+$("scalebox").addEventListener("click",e=>{const k=e.target.dataset.k;if(k)setK(parseFloat(k))});
+$("k").addEventListener("change",()=>setK(parseFloat($("k").value)));
+$("divBtn").onclick=()=>{const n=parseFloat($("div").value);if(!(n>=1)){note("ใส่จำนวนชุดตั้งแต่ 1 ขึ้นไป",false);return}setK(K/n)};
+$("tgtBtn").onclick=()=>{const t=parseFloat($("tgt").value),b=chosen().reduce((s,i)=>s+i.q,0);if(!(t>0)||!(b>0)){note("ใส่จำนวนเป้าหมายที่มากกว่า 0 และต้องมีรายการ",false);return}setK(t/b)};
 
+$("pSave").onclick=()=>{
+  const n=$("pn").value.trim();if(!n){note("ใส่ชื่อสินค้าก่อน",false);$("pn").focus();return}
+  const x={n,c:$("pc").value.trim(),u:$("pu").value.trim(),p:Math.max(0,parseFloat($("pp").value)||0),ds:$("pd").value.trim()};
+  const k=products.findIndex(y=>y.n===n);k>=0?products[k]=x:products.push(x);
+  saveP();["pn","pc","pu","pd"].forEach(id=>$(id).value="");$("pp").value=0;note(`บันทึกสินค้า "${n}" แล้ว`,false);render();
+};
+$("plist").addEventListener("click",e=>{
+  const pe=e.target.dataset.pe,pd=e.target.dataset.pd;
+  if(pe!=null){const x=products[+pe];$("pn").value=x.n;$("pc").value=x.c||"";$("pu").value=x.u||"";$("pp").value=x.p||0;$("pd").value=x.ds||"";$("pn").focus()}
+  if(pd!=null){const x=products.splice(+pd,1)[0];saveP();note(`ลบสินค้า "${x.n}" แล้ว (รายการในตารางไม่เปลี่ยน)`,false);render()}
+});
+$("n").addEventListener("input",()=>{const x=products.find(y=>y.n===$("n").value.trim());if(x){$("p").value=x.p||0}});
 function add(){
   const n=$("n").value.trim();if(!n){$("n").focus();return}
+  const pr=products.find(y=>y.n===n)||{};
   const num=id=>Math.max(0,parseFloat($(id).value)||0);
-  items.push({id:Date.now()+Math.random(),n,q:num("q"),p:num("p"),d:Math.min(100,num("d"))});
+  items.push({id:Date.now()+Math.random(),n,c:pr.c||"",u:pr.u||"",ds:pr.ds||"",q:num("q"),p:num("p"),d:Math.min(100,num("d"))});
   save();$("n").value="";$("n").focus();render();
 }
 $("addBtn").onclick=add;
@@ -139,14 +198,18 @@ $("del").onclick=()=>{pendingDel=new Set(sel);note(`ลบ ${sel.size} ราย
 $("xls").onclick=()=>{
   const c=chosen();if(!c.length){note("ยังไม่มีรายการ",false);return}
   const ws={},L=c.length;
-  ["ชื่อสินค้า","จำนวน","ราคา/หน่วย","ส่วนลด %","รวม"].forEach((h,k)=>ws[String.fromCharCode(65+k)+"1"]={t:"s",v:h});
+  ["ชื่อสินค้า","จำนวนตั้งต้น","ราคา/หน่วย","ส่วนลด %","จำนวนที่ปรับ","รวม","ตัวคูณ","","รหัส","หน่วย","รายละเอียด"].forEach((h,k)=>ws[String.fromCharCode(65+k)+"1"]={t:"s",v:h});
   c.forEach((it,k)=>{const r=k+2;
     ws["A"+r]={t:"s",v:it.n};ws["B"+r]={t:"n",v:it.q};ws["C"+r]={t:"n",v:it.p};ws["D"+r]={t:"n",v:it.d};
-    ws["E"+r]={t:"n",v:total(it),f:`B${r}*C${r}*(1-D${r}/100)`,z:"#,##0.00"}});
+    ws["E"+r]={t:"n",v:it.q*K,f:`B${r}*$H$1`};
+    ws["F"+r]={t:"n",v:total(it),f:`E${r}*C${r}*(1-D${r}/100)`,z:"#,##0.00"}});
+  ws["H1"]={t:"n",v:K};
+  c.forEach((it,k)=>{const r=k+2;if(r>1){ws["I"+r]={t:"s",v:it.c||""};ws["J"+r]={t:"s",v:it.u||""};ws["K"+r]={t:"s",v:it.ds||""}}});
   const tr=L+2;ws["A"+tr]={t:"s",v:"รวมทั้งหมด"};
   ws["B"+tr]={t:"n",v:c.reduce((s,i)=>s+i.q,0),f:`SUM(B2:B${L+1})`};
-  ws["E"+tr]={t:"n",v:c.reduce((s,i)=>s+total(i),0),f:`SUM(E2:E${L+1})`,z:"#,##0.00"};
-  ws["!ref"]=`A1:E${tr}`;ws["!cols"]=[{wch:50},{wch:10},{wch:14},{wch:10},{wch:16}];
+  ws["E"+tr]={t:"n",v:c.reduce((s,i)=>s+i.q*K,0),f:`SUM(E2:E${L+1})`};
+  ws["F"+tr]={t:"n",v:c.reduce((s,i)=>s+total(i),0),f:`SUM(F2:F${L+1})`,z:"#,##0.00"};
+  ws["!ref"]=`A1:K${tr}`;ws["!cols"]=[{wch:50},{wch:14},{wch:14},{wch:10},{wch:14},{wch:16},{wch:9},{wch:9},{wch:14},{wch:10},{wch:40}];
   // grouped sheet using SUMIF over the detail sheet
   const names=[...new Set(c.map(i=>i.n))],g={};
   names.forEach(n=>g[n]=c.filter(i=>i.n===n));
@@ -156,10 +219,10 @@ $("xls").onclick=()=>{
   names.forEach((n,k)=>{const r=k+2,a=g[n];
     w2["A"+r]={t:"s",v:n};
     w2["B"+r]={t:"n",v:a.length,f:`COUNTIF(${R},A${r})`};
-    w2["C"+r]={t:"n",v:a.reduce((s,i)=>s+i.q,0),f:`SUMIF(${R},A${r},รายการ!$B$2:$B$${L+1})`};
-    w2["D"+r]={t:"n",v:a.reduce((s,i)=>s+total(i),0),f:`SUMIF(${R},A${r},รายการ!$E$2:$E$${L+1})`,z:"#,##0.00"}});
+    w2["C"+r]={t:"n",v:a.reduce((s,i)=>s+i.q*K,0),f:`SUMIF(${R},A${r},รายการ!$E$2:$E$${L+1})`};
+    w2["D"+r]={t:"n",v:a.reduce((s,i)=>s+total(i),0),f:`SUMIF(${R},A${r},รายการ!$F$2:$F$${L+1})`,z:"#,##0.00"}});
   const gt=names.length+2;w2["A"+gt]={t:"s",v:"รวม"};
-  [["B",c.length],["C",c.reduce((s,i)=>s+i.q,0)],["D",c.reduce((s,i)=>s+total(i),0)]].forEach(([col,v])=>
+  [["B",c.length],["C",c.reduce((s,i)=>s+i.q*K,0)],["D",c.reduce((s,i)=>s+total(i),0)]].forEach(([col,v])=>
     w2[col+gt]={t:"n",v,f:`SUM(${col}2:${col}${gt-1})`,z:col==="D"?"#,##0.00":undefined});
   w2["!ref"]=`A1:D${gt}`;
   const wb=XLSX.utils.book_new();
@@ -170,12 +233,12 @@ $("xls").onclick=()=>{
 // ---- PDF: render chosen rows to an image, place on A4 pages ----
 $("pdf").onclick=async()=>{
   const c=chosen();if(!c.length){note("ยังไม่มีรายการ",false);return}
-  const g={};c.forEach(i=>{const x=g[i.n]||(g[i.n]={c:0,q:0,t:0});x.c++;x.q+=i.q;x.t+=total(i)});
-  const rows=c.map((i,k)=>`<tr><td>${k+1}</td><td>${esc(i.n)}</td><td class="n">${fmtq(i.q)}</td><td class="n">${fmt(i.p)}</td><td class="n">${fmtq(i.d)}</td><td class="n f">${fmt(total(i))}</td></tr>`).join("");
+  const g={};c.forEach(i=>{const x=g[i.n]||(g[i.n]={c:0,q:0,t:0});x.c++;x.q+=i.q*K;x.t+=total(i)});
+  const rows=c.map((i,k)=>`<tr><td>${k+1}</td><td>${esc(i.n)}${detail(i)?`<br><span style="font-size:11px;color:#555">${esc(detail(i))}</span>`:""}</td><td class="n">${fmtq(i.q)}</td><td class="n">${fmt(i.p)}</td><td class="n">${fmtq(i.d)}</td><td class="n f">${fmtq(i.q*K)}</td><td class="n f">${fmt(total(i))}</td></tr>`).join("");
   const grows=Object.entries(g).map(([n,x])=>`<tr><td>${esc(n)}</td><td class="n">${x.c}</td><td class="n">${fmtq(x.q)}</td><td class="n f">${fmt(x.t)}</td></tr>`).join("");
   $("pdfbox").innerHTML=`<h2>รายการสินค้า ${new Date().toLocaleDateString("th-TH")} (${c.length} รายการ)</h2>
-  <table><thead><tr><th>#</th><th>ชื่อสินค้า</th><th>จำนวน</th><th>ราคา/หน่วย</th><th>ส่วนลด %</th><th>รวม</th></tr></thead><tbody>${rows}</tbody>
-  <tfoot><tr><td colspan="5">รวมทั้งหมด</td><td class="n">${fmt(c.reduce((s,i)=>s+total(i),0))}</td></tr></tfoot></table>
+  <table><thead><tr><th>#</th><th>ชื่อสินค้า</th><th>จำนวนตั้งต้น</th><th>ราคา/หน่วย</th><th>ส่วนลด %</th><th>จำนวนที่ปรับ ×${fmtq(K)}</th><th>รวม</th></tr></thead><tbody>${rows}</tbody>
+  <tfoot><tr><td colspan="6">รวมทั้งหมด</td><td class="n">${fmt(c.reduce((s,i)=>s+total(i),0))}</td></tr></tfoot></table>
   <h2 style="margin-top:18px">รวมตามชื่อสินค้า</h2>
   <table><thead><tr><th>ชื่อสินค้า</th><th>รายการ</th><th>รวมจำนวน</th><th>รวมเป็นเงิน</th></tr></thead><tbody>${grows}</tbody></table>`;
   try{
