@@ -21,6 +21,9 @@ input[type=text],input[type=number],input[type=date]{width:100%;min-width:52px;p
 table input[type=number]{max-width:84px}
 [data-res]{min-width:160px}
 #rows input[data-f="n"]{min-width:120px}
+textarea{width:100%;min-width:52px;padding:3px 5px;border:1px solid var(--brd);border-radius:5px;font:inherit;font-size:13px;line-height:1.35;background:var(--sur2);color:var(--tx);resize:none;overflow:hidden;display:block}
+textarea:focus-visible{outline:2px solid var(--grn);outline-offset:1px}
+#rows textarea[data-f="n"]{min-width:130px}
 #rows input[data-f="u"]{max-width:64px;min-width:44px}
 #rows select,#ptbl input{font-size:13px}
 button{font:inherit;font-size:13px;padding:4px 9px;border:1px solid var(--brd);border-radius:6px;background:var(--sur);color:var(--tx);cursor:pointer}
@@ -59,11 +62,17 @@ tfoot td{background:var(--grn2);font-weight:700}
 .msg[hidden]{display:none!important}
 .msg span{flex:1;min-width:160px}
 .x{padding:1px 7px;border-radius:12px;font-size:12px;margin-top:4px}
-#pdfbox{position:fixed;left:-10000px;top:0;width:900px;padding:24px}
+#pdfbox{position:fixed;left:-10000px;top:0;width:max-content;min-width:900px;padding:24px}
 #pdfbox,.paper{background:#fff;color:#111;font-family:Sarabun,"Noto Sans Thai",sans-serif;font-size:13px}
 .paper{padding:16px;border:1px solid var(--brd);min-width:640px}
-#pdfbox table,.paper table{width:100%}#pdfbox th,.paper th{background:#1d6f42;color:#fff}#pdfbox td,.paper td{border-color:#bbb;color:#111;background:#fff}
-#pdfbox td.f,.paper td.f{background:#e8f0fa}#pdfbox tfoot td,.paper tfoot td{background:#e8f3ed}#pdfbox h2,.paper h2{color:#1d6f42;font-size:17px;display:block}
+#pdfbox,.paper{text-align:center}
+#pdfbox table,.paper table{width:100%;margin:0 auto 6px;table-layout:auto}
+#pdfbox th,.paper th{background:#1d6f42;color:#fff;text-align:center;vertical-align:middle;padding:6px 8px}
+#pdfbox td,.paper td{border-color:#bbb;color:#111;background:#fff;text-align:center;vertical-align:middle;padding:5px 8px}
+#pdfbox td.n,.paper td.n{text-align:center}
+#pdfbox td.wr,.paper td.wr{white-space:pre-wrap;overflow-wrap:break-word;max-width:210px}
+#pdfbox td.f,.paper td.f{background:#e8f0fa}#pdfbox tfoot td,.paper tfoot td{background:#e8f3ed}#pdfbox h2,.paper h2{color:#1d6f42;font-size:17px;display:block;text-align:center}
+#pdfbox div,.paper div{text-align:center}
 .pvwrap{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:12px;z-index:50}
 .pvwrap[hidden]{display:none}
 .pv{background:var(--sur);color:var(--tx);border:1px solid var(--brd);border-radius:10px;max-width:960px;width:100%;max-height:100%;display:flex;flex-direction:column}
@@ -426,8 +435,8 @@ function drawTable(){updProducts();
   $("rows").innerHTML=(vis().length||emptyRows)?vis().map(r=>`<tr data-r="${r.id}" class="${sel.has(r.id)?"sel":""}${r.done?" done":""}">
     <td><input type="checkbox" data-id="${r.id}" ${sel.has(r.id)?"checked":""} aria-label="เลือก"></td>
     <td><select data-f="p" data-r="${r.id}" aria-label="ชื่อสินค้า" style="min-width:100px;padding:2px 3px;font-size:13px;border:1px solid var(--brd);border-radius:5px;background:var(--sur2);color:var(--tx)">${products.map(x=>`<option value="${esc(x.name)}"${x.name===r.p?" selected":""}>${esc(x.name)}</option>`).join("")}</select></td>
-    <td><input type="text" data-f="n" data-r="${r.id}" value="${esc(r.n)}" placeholder="พิมพ์ชื่อรายการ" aria-label="ชื่อรายการ"></td>
-    ${showDates?`<td><input type="text" data-f="lot" data-r="${r.id}" value="${esc(r.lot||"")}" placeholder="Lot" aria-label="ล็อต" style="min-width:84px"></td><td><input type="date" data-f="mfg" data-r="${r.id}" value="${esc(r.mfg||"")}" aria-label="วันผลิต" style="min-width:128px"></td><td><input type="date" data-f="exp" data-r="${r.id}" value="${esc(r.exp||"")}" aria-label="วันหมดอายุ" style="min-width:128px"><span class="dtx" data-exps="${r.id}">${expText(r)}</span></td>`:""}
+    <td><textarea rows="1" data-f="n" data-r="${r.id}" placeholder="พิมพ์ชื่อรายการ" aria-label="ชื่อรายการ">${esc(r.n)}</textarea></td>
+    ${showDates?`<td><textarea rows="1" data-f="lot" data-r="${r.id}" placeholder="Lot (กด Enter เพื่อขึ้นบรรทัดใหม่)" aria-label="ล็อต" style="min-width:150px">${esc(r.lot||"")}</textarea></td><td><input type="date" data-f="mfg" data-r="${r.id}" value="${esc(r.mfg||"")}" aria-label="วันผลิต" style="min-width:128px"></td><td><input type="date" data-f="exp" data-r="${r.id}" value="${esc(r.exp||"")}" aria-label="วันหมดอายุ" style="min-width:128px"><span class="dtx" data-exps="${r.id}">${expText(r)}</span></td>`:""}
     <td><input type="number" data-f="q" data-r="${r.id}" value="${r.q||""}" min="0" step="any" aria-label="ปริมาณ"></td>
     <td><input type="text" data-f="u" data-r="${r.id}" value="${esc(r.u)}" style="min-width:60px" aria-label="หน่วย"></td>
     <td class="n" data-pct="${r.id}"></td>
@@ -436,7 +445,7 @@ function drawTable(){updProducts();
     ${showChem?chem.map(k=>`<td><div class="kv"><input type="number" data-kc="${k.id}" data-r="${r.id}" value="${(r.c||{})[k.id]??""}" step="any" aria-label="${esc(k.n)}" title="${esc(k.n)}"${showTemps?"":` style="max-width:80px"`}>${showTemps?`<input type="number" class="kt" data-kt="${k.id}" data-r="${r.id}" value="${(r.ct||{})[k.id]??""}" step="any" placeholder="°C" aria-label="อุณหภูมิที่วัด ${esc(k.n)}" title="อุณหภูมิที่วัด (°C)">`:""}</div></td>`).join(""):""}
     <td style="white-space:nowrap"><button class="dn" data-ins="${r.id}" aria-label="แทรกแถวใหม่ใต้แถวนี้">＋ แทรก</button> <button class="dn" data-done="${r.id}" aria-label="${r.done?"เรียกคืน":"เสร็จแล้ว"}">${r.done?"↩ เรียกคืน":"🙈 ซ่อน (เสร็จ)"}</button> <button class="d x" data-rdel="${r.id}" aria-label="ลบรายการ">✕</button></td></tr>`).join("")+emptyRows
     :`<tr><td colspan="${Math.max(cols.length,1)+7+preN()+extraN()}" class="empty">${rows.length?"ทุกรายการเสร็จแล้ว (ซ่อนอยู่) ติ๊ก \"แสดงที่เสร็จแล้ว\" เพื่อดู":"ยังไม่มีรายการ กด \"+ เพิ่มรายการ\""}</td></tr>`;
-  refresh();
+  refresh();autoAll();
 }
 // live recalculation without rebuilding inputs (keeps cursor while typing)
 function refresh(){
@@ -509,9 +518,11 @@ function matrixHtml(c,out){
 function weightByProduct(c){const m=new Map();c.forEach(r=>{const p=r.p||NOP,x=m.get(p)||{p,c:0,g:0};x.c++;x.g+=grams(r)||0;m.set(p,x)});return [...m.values()]}
 $("fx").onchange=refresh;
 
+const autoH=el=>{el.style.height="auto";el.style.height=(el.scrollHeight+2)+"px"};
+const autoAll=()=>document.querySelectorAll("#rows textarea").forEach(autoH);
 const num=v=>{const x=parseFloat(v);return isNaN(x)?undefined:x};
 $("rows").addEventListener("input",e=>{
-  const t=e.target,id=+t.dataset.r;if(!id)return;const r=rows.find(x=>x.id===id);
+  const t=e.target,id=+t.dataset.r;if(!id)return;const r=rows.find(x=>x.id===id);if(t.tagName==="TEXTAREA")autoH(t);
   if(t.dataset.f==="mfg"||t.dataset.f==="exp"){r[t.dataset.f]=t.value;const el=document.querySelector(`[data-exps="${r.id}"]`);if(el)el.innerHTML=expText(r);save();return}
   if(t.dataset.f==="lot"){r.lot=t.value;save();return}
   if(t.dataset.f==="n"||t.dataset.f==="u"||t.dataset.f==="p"){r[t.dataset.f]=t.value;if(t.dataset.f==="p")updProducts()}
@@ -823,14 +834,16 @@ const saveXlsx=wb=>saveFile(`${fileBase()}.xlsx`,XLSX.write(wb,{bookType:"xlsx",
 // ---- PDF: each chosen product is a section; "one page" puts them all in one flow, "separate" starts each on its own page ----
 const exNote=c=>{const o=c.filter(r=>grams(r)==null&&mls(r)==null);return o.length?`<div style="font-size:11px;color:#555;margin:2px 0 6px">ไม่นับ ${o.length} แถวที่หน่วยไม่ใช่น้ำหนัก: ${esc([...new Set(o.map(r=>(r.n||"-")+" ("+(r.u||"ไม่มีหน่วย")+")"))].join(", "))}</div>`:""};
 const gsum=c=>c.reduce((a,r)=>a+(grams(r)||0),0);
-const wtxtOf=c=>{const g=gsum(c);return `${fq(g)} กรัม (${fq(g/1000)} กก.)`};
+const wtxtOf=c=>{const g=gsum(c),r2=n=>n.toLocaleString("th-TH",{maximumFractionDigits:2});return `${r2(g)} กรัม (${n3(g/1000)} กก.)`};
+const n3=n=>n.toLocaleString("th-TH",{maximumFractionDigits:3});
 // only information that exists is printed: unchanged steps, empty units and zero weights are left out
 function productBlock(name,rs){
   if(!rs.length)return `<h2 style="margin:16px 0 6px">${esc(name)}</h2><div style="color:#555;margin:4px 0 8px">ยังไม่มีวัตถุดิบในสูตรนี้</div>`;
   const hasU=rs.some(r=>(r.u||"").trim()),units=new Set(rs.map(r=>r.u.trim())),tot=rs.reduce((a,r)=>a+result(r),0),pm=pctInfoAll(rs),hasP=rs.some(r=>pm.get(r.id));
   const g=gsum(rs),pr=products.find(x=>x.name===name)||{};
-  const C=[{h:"#",f:(r,i)=>i+1},{h:"ชื่อวัตถุดิบ",f:r=>esc(r.n)}];
-  if(ox("lot")&&rs.some(r=>(r.lot||"").trim()))C.push({h:"Lot",f:r=>esc(r.lot||"")});
+  const fr=n=>n.toLocaleString("th-TH",{maximumFractionDigits:2});
+  const C=[{h:"#",f:(r,i)=>i+1},{h:"ชื่อวัตถุดิบ",c:"wr",w:130,f:r=>esc(r.n)}];
+  if(ox("lot")&&rs.some(r=>(r.lot||"").trim()))C.push({h:"Lot",c:"wr",w:130,f:r=>esc(r.lot||"")});
   if(ox("mfg")&&rs.some(r=>r.mfg))C.push({h:"วันผลิต",f:r=>fmtD(r.mfg)});
   if(ox("exp")&&rs.some(r=>r.exp))C.push({h:"หมดอายุ",f:r=>fmtD(r.exp)});
   if(ox("q"))C.push({h:"ปริมาณ",c:"n",f:r=>fq(r.q)});
@@ -838,15 +851,15 @@ function productBlock(name,rs){
   if(ox("pct")&&hasP)C.push({h:"% ในสูตร",c:"n",f:r=>pm.get(r.id)?fm(pm.get(r.id).pct)+"%":"—"});
   activeCols(rs).filter(x=>ox("s:"+x.id)).forEach(x=>C.push({h:`${esc(x.n)}<br><small>${OPS[x.op].l}</small>`,c:"n",f:r=>fq(eff(r,x))}));
   const iRes=C.length;
-  if(ox("res"))C.push({h:"ผลลัพธ์",c:"n f",f:r=>fq(result(r))});
+  if(ox("res"))C.push({h:"ผลลัพธ์",c:"n f",f:r=>fr(result(r))});
   const kc=chem.filter(k=>ox("k:"+k.id)&&chemHas(rs,k));
   kc.forEach(k2=>C.push({h:`${esc(k2.n)}${k2.u?`<br><small>${esc(k2.u)}</small>`:""}`,c:"n",f:r=>(r.c||{})[k2.id]!==undefined?fq3((r.c||{})[k2.id])+(ox("temp")&&(r.ct||{})[k2.id]!==undefined?` <small>(${fq((r.ct||{})[k2.id])}°C)</small>`:""):""}));
   const meas=ox("meas")?chem.filter(k=>(pr.meas||{})[k.id]!==undefined):[];
   const est=ox("est")?chem.filter(k=>k.avg&&chemHas(rs,k)&&chemEst(rs,k)!=null):[];
   const chemLines=(meas.length?`<div style="margin:4px 0"><b>ค่าที่วัดได้ของสินค้า:</b> ${meas.map(k=>`${esc(k.n)} ${fq3(pr.meas[k.id])}${k.u?" "+esc(k.u):""}${ox("temp")?atT((pr.mt||{})[k.id]):""}`).join(" · ")}</div>`:"")+(est.length?`<div style="margin:4px 0;color:#555"><b>ค่าเฉลี่ยถ่วงน้ำหนักจากส่วนผสม (ประมาณ):</b> ${est.map(k=>`${esc(k.n)} ${fq3(chemEst(rs,k))}${k.u?" "+esc(k.u):""}`).join(" · ")}</div>`:"");
-  const foot=ox("res")&&rs.length>1&&units.size<=1?`<tfoot><tr><td colspan="${iRes}">รวม</td><td class="n">${fq(tot)}</td>${kc.length?`<td colspan="${kc.length}"></td>`:""}</tr></tfoot>`:"";
+  const foot=ox("res")&&rs.length>1&&units.size<=1?`<tfoot><tr><td colspan="${iRes}">รวม</td><td class="n">${fr(tot)}</td>${kc.length?`<td colspan="${kc.length}"></td>`:""}</tr></tfoot>`:"";
   return `<h2 style="margin:16px 0 6px">${esc(name)}</h2>
-  <table><thead><tr>${C.map(x=>`<th>${x.h}</th>`).join("")}</tr></thead><tbody>${rs.map((r,i)=>`<tr>${C.map(x=>`<td${x.c?` class="${x.c}"`:""}>${x.f(r,i)}</td>`).join("")}</tr>`).join("")}</tbody>
+  <table><thead><tr>${C.map(x=>`<th${x.w?` style="min-width:${x.w}px"`:""}>${x.h}</th>`).join("")}</tr></thead><tbody>${rs.map((r,i)=>`<tr>${C.map(x=>`<td${x.c?` class="${x.c}"`:""}>${x.f(r,i)}</td>`).join("")}</tr>`).join("")}</tbody>
   ${foot}</table>
   ${g&&ox("wt")?`<div style="margin:6px 0"><b>รวมน้ำหนัก ${esc(name)}:</b> ${wtxtOf(rs)}</div>${exNote(rs)}`:""}${chemLines}`;
 }
@@ -867,16 +880,25 @@ function buildParts(c){
 async function renderPdf(parts){
   try{
     await (document.fonts&&document.fonts.ready);
-    const {jsPDF}=window.jspdf,pdf=new jsPDF({unit:"mm",format:"a4"});
-    const W=210,H=297,m=10,w=W-2*m,ph=H-2*m;let firstPage=true;
+    const {jsPDF}=window.jspdf;let pdf=null;
     for(const html of parts){
-      $("pdfbox").innerHTML=html;
-      const cv=await html2canvas($("pdfbox"),{scale:2,backgroundColor:"#ffffff"});
-      const h=cv.height*w/cv.width,pxPer=cv.height/h;let y=0;
-      while(y<h){const sh=Math.min(ph,h-y),part=document.createElement("canvas");
-        part.width=cv.width;part.height=Math.round(sh*pxPer);
-        part.getContext("2d").drawImage(cv,0,Math.round(y*pxPer),cv.width,part.height,0,0,cv.width,part.height);
-        if(!firstPage)pdf.addPage();firstPage=false;pdf.addImage(part.toDataURL("image/jpeg",.92),"JPEG",m,m,w,sh);y+=ph}
+      const box=$("pdfbox");box.innerHTML=html;
+      const cv=await html2canvas(box,{scale:2,backgroundColor:"#ffffff"});
+      // a very wide table goes on a landscape page so the text stays readable
+      const land=box.offsetWidth>1150,W=land?297:210,H=land?210:297,m=12,w=W-2*m,ph=H-2*m;
+      if(!pdf)pdf=new jsPDF({orientation:land?"landscape":"portrait",unit:"mm",format:"a4"});
+      // places where a page may end: below a table row or a text line (not under a heading or the table header)
+      const top=box.getBoundingClientRect().top,k=cv.height/box.offsetHeight;
+      const cuts=[...box.querySelectorAll("tbody tr,tfoot tr,div")].map(el=>(el.getBoundingClientRect().bottom-top)*k).sort((x,y)=>x-y);
+      const pxPer=cv.width/w,pagePx=Math.round(ph*pxPer);let ys=0,first=true;
+      while(ys<cv.height-2){
+        let ye=Math.min(ys+pagePx,cv.height);
+        if(ye<cv.height){const ok=cuts.filter(c=>c>ys+pagePx*0.35&&c<=ye);if(ok.length)ye=Math.round(ok[ok.length-1])}
+        const hpx=ye-ys,part=document.createElement("canvas");part.width=cv.width;part.height=hpx;
+        part.getContext("2d").drawImage(cv,0,ys,cv.width,hpx,0,0,cv.width,hpx);
+        if(pdf.__used)pdf.addPage("a4",land?"landscape":"portrait");
+        pdf.__used=true;first=false;
+        pdf.addImage(part.toDataURL("image/jpeg",.92),"JPEG",m,m,w,hpx/pxPer);ys=ye}
     }
     await saveFile(`${fileBase()}.pdf`,pdf.output("arraybuffer"));
   }catch(e){note("สร้าง PDF ไม่สำเร็จ ลองอีกครั้ง",false)}
