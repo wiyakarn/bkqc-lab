@@ -142,7 +142,7 @@ tfoot td{background:var(--grn2);font-weight:700}
     <select id="newOp" aria-label="ฟังก์ชันของขั้นใหม่" style="width:auto;padding:7px"></select><button id="addCol">+ เพิ่มขั้นคำนวณ</button>
     <span style="display:inline-flex;gap:4px;align-items:center"><input type="text" id="kName" placeholder="ค่าเคมีใหม่ เช่น Aw" aria-label="ชื่อค่าเคมีใหม่" style="width:130px"><input type="text" id="kUnit" placeholder="หน่วย" aria-label="หน่วย" style="width:56px"><button id="kAdd">+ เพิ่มช่องค่าเคมี</button></span>
     <label class="chk"><input type="checkbox" id="kShow"> แสดงช่องค่าเคมี</label>
-    <label class="chk"><input type="checkbox" id="tShow"> ใส่อุณหภูมิที่วัดแต่ละค่า</label>
+    <label class="chk"><input type="checkbox" id="tShow"> ใส่ Temp แต่ละค่า</label>
     <label class="chk">หน่วยอุณหภูมิ <select id="tUnit" style="width:auto;padding:3px;border:1px solid var(--brd);border-radius:5px;font:inherit;background:var(--sur2);color:var(--tx)"><option value="C">C</option><option value="°C">°C</option><option value="°F">°F</option></select></label>
     <label class="chk"><input type="checkbox" id="dShow"> แสดง Lot / วันผลิต / หมดอายุ</label>
     <label class="chk"><input type="checkbox" id="all"> เลือกทั้งหมด</label>
@@ -423,7 +423,7 @@ function updProducts(){
   $("pchips").innerHTML=`<button data-pc="" aria-pressed="${!psel.size}">ทุกสูตร</button>`+names.map(x=>`<button data-pc="${esc(x)}" aria-pressed="${psel.has(x)}">${esc(x)}</button>`).join("");
   const kk=showChem?chem:[];
   $("pthead").innerHTML=`<tr><th>ชื่อสินค้า</th><th>รายละเอียด</th><th>จำนวนแถวสูตร</th>${kk.map(k=>`<th title="ค่าที่วัดได้จากสินค้าสำเร็จรูป">วัดได้: ${esc(kLabel(k))}</th>`).join("")}<th style="width:150px"></th></tr>`;
-  $("ptbl").innerHTML=products.length?products.map((x,i)=>`<tr><td><input type="text" data-pname="${i}" value="${esc(x.name)}" aria-label="ชื่อสินค้า"></td><td><input type="text" data-pnote="${i}" value="${esc(x.note||"")}" aria-label="รายละเอียด"></td><td class="n">${rows.filter(r=>r.p===x.name).length}</td>${kk.map(k=>`<td><input type="number" data-pm="${i}" data-pk="${k.id}" value="${(x.meas||{})[k.id]??""}" step="any" aria-label="วัดได้ ${esc(k.n)}" style="max-width:${showTemps?64:84}px">${showTemps?`<input type="number" class="kt" data-pmt="${i}" data-pk="${k.id}" value="${(x.mt||{})[k.id]??""}" step="any" placeholder="${tempUnit}" aria-label="อุณหภูมิที่วัด ${esc(k.n)}" style="max-width:58px;background:var(--blu2)">`:""}<span class="est" data-est="${i}|${k.id}"></span></td>`).join("")}<td><button class="dn" data-pdup="${i}" aria-label="คัดลอกสูตร ${esc(x.name)}">คัดลอกสูตร</button> <button class="d x" data-pdel="${i}" aria-label="ลบสินค้า ${esc(x.name)}">ลบ</button></td></tr>`).join(""):`<tr><td colspan="${4+kk.length}" class="empty">ยังไม่มีสินค้า พิมพ์ชื่อด้านบนแล้วกด "+ สร้างสินค้า" ก่อนเพิ่มสูตร</td></tr>`;
+  $("ptbl").innerHTML=products.length?products.map((x,i)=>`<tr><td><input type="text" data-pname="${i}" value="${esc(x.name)}" aria-label="ชื่อสินค้า"></td><td><input type="text" data-pnote="${i}" value="${esc(x.note||"")}" aria-label="รายละเอียด"></td><td class="n">${rows.filter(r=>r.p===x.name).length}</td>${kk.map(k=>`<td><input type="number" data-pm="${i}" data-pk="${k.id}" value="${(x.meas||{})[k.id]??""}" step="any" aria-label="วัดได้ ${esc(k.n)}" style="max-width:${showTemps?64:84}px">${showTemps?`<input type="number" class="kt" data-pmt="${i}" data-pk="${k.id}" value="${(x.mt||{})[k.id]??""}" step="any" placeholder="${tempUnit}" aria-label="Temp ${esc(k.n)}" style="max-width:58px;background:var(--blu2)">`:""}<span class="est" data-est="${i}|${k.id}"></span></td>`).join("")}<td><button class="dn" data-pdup="${i}" aria-label="คัดลอกสูตร ${esc(x.name)}">คัดลอกสูตร</button> <button class="d x" data-pdel="${i}" aria-label="ลบสินค้า ${esc(x.name)}">ลบ</button></td></tr>`).join(""):`<tr><td colspan="${4+kk.length}" class="empty">ยังไม่มีสินค้า พิมพ์ชื่อด้านบนแล้วกด "+ สร้างสินค้า" ก่อนเพิ่มสูตร</td></tr>`;
   refreshEst();
   $("addRow").disabled=!products.length;$("addRow").title=products.length?"":"สร้างชื่อสินค้าก่อน";
 }
@@ -444,7 +444,7 @@ function drawTable(){updProducts();
     <td class="n" data-pct="${r.id}"></td>
     ${cols.map(c=>`<td><input type="number" data-m="${c.id}" data-r="${r.id}" value="${r.m[c.id]??""}" step="any" placeholder="${OPS[c.op].d}" aria-label="${esc(c.n)}"></td>`).join("")}
     <td class="n f" data-res="${r.id}"></td>
-    ${showChem?chem.map(k=>`<td><div class="kv"><input type="number" data-kc="${k.id}" data-r="${r.id}" value="${(r.c||{})[k.id]??""}" step="any" aria-label="${esc(k.n)}" title="${esc(k.n)}"${showTemps?"":` style="max-width:80px"`}>${showTemps?`<input type="number" class="kt" data-kt="${k.id}" data-r="${r.id}" value="${(r.ct||{})[k.id]??""}" step="any" placeholder="${tempUnit}" aria-label="อุณหภูมิที่วัด ${esc(k.n)}" title="อุณหภูมิที่วัด (${tempUnit})">`:""}</div></td>`).join(""):""}
+    ${showChem?chem.map(k=>`<td><div class="kv"><input type="number" data-kc="${k.id}" data-r="${r.id}" value="${(r.c||{})[k.id]??""}" step="any" aria-label="${esc(k.n)}" title="${esc(k.n)}"${showTemps?"":` style="max-width:80px"`}>${showTemps?`<input type="number" class="kt" data-kt="${k.id}" data-r="${r.id}" value="${(r.ct||{})[k.id]??""}" step="any" placeholder="${tempUnit}" aria-label="Temp ${esc(k.n)}" title="Temp (${tempUnit})">`:""}</div></td>`).join(""):""}
     <td style="white-space:nowrap"><button class="dn" data-ins="${r.id}" aria-label="แทรกแถวใหม่ใต้แถวนี้">＋ แทรก</button> <button class="dn" data-done="${r.id}" aria-label="${r.done?"เรียกคืน":"เสร็จแล้ว"}">${r.done?"↩ เรียกคืน":"🙈 ซ่อน (เสร็จ)"}</button> <button class="d x" data-rdel="${r.id}" aria-label="ลบรายการ">✕</button></td></tr>`).join("")+emptyRows
     :`<tr><td colspan="${Math.max(cols.length,1)+7+preN()+extraN()}" class="empty">${rows.length?"ทุกรายการเสร็จแล้ว (ซ่อนอยู่) ติ๊ก \"แสดงที่เสร็จแล้ว\" เพื่อดู":"ยังไม่มีรายการ กด \"+ เพิ่มรายการ\""}</td></tr>`;
   refresh();autoAll();
@@ -917,7 +917,7 @@ function optGroups(c){
    {t:"ข้อมูลวัตถุดิบ",items:[["lot","Lot",hasLot],["mfg","วันผลิต",hasMfg],["exp","หมดอายุ (และเหลือกี่วัน)",hasExp],["q","ปริมาณ",true],["u","หน่วย",hasU],["pct","% ในสูตร",hasP]]},
    {t:"ช่องใส่ค่าคำนวณ (ขั้นคำนวณ)",items:cols.map(x=>["s:"+x.id,`${x.n} (${OPS[x.op].l})`,act.has(x.id)])},
    {t:"ผลลัพธ์",items:[["res","ผลลัพธ์",true],["wt","รวมน้ำหนัก",c.some(r=>grams(r)!=null)]]},
-   {t:"ค่าเคมี / คุณภาพ",items:[...chem.map(k=>["k:"+k.id,kLabel(k),chemHas(c,k)]),["temp","อุณหภูมิที่วัดของแต่ละค่า",chem.some(k=>tempHas(c,k))],["meas","ค่าที่วัดได้ของสินค้า",meas],["est","ค่าเฉลี่ยคำนวณจากส่วนผสม",chem.some(k=>k.avg&&chemHas(c,k))]]}
+   {t:"ค่าเคมี / คุณภาพ",items:[...chem.map(k=>["k:"+k.id,kLabel(k),chemHas(c,k)]),["temp","Temp ของแต่ละค่า",chem.some(k=>tempHas(c,k))],["meas","ค่าที่วัดได้ของสินค้า",meas],["est","ค่าเฉลี่ยคำนวณจากส่วนผสม",chem.some(k=>k.avg&&chemHas(c,k))]]}
   ];
 }
 function fillOpts(){
