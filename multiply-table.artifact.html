@@ -86,7 +86,7 @@ tfoot td{background:var(--grn2);font-weight:700}
     <div style="flex:2;min-width:160px"><label for="pnote">รายละเอียด (ไม่บังคับ)</label><input type="text" id="pnote" placeholder="ขนาด / หน่วยผลิต / หมายเหตุ" autocomplete="off"></div>
     <button class="p" id="pCreate">+ สร้างสินค้า</button>
   </div>
-  <div class="scroll"><table><thead><tr><th>ชื่อสินค้า</th><th>รายละเอียด</th><th>จำนวนแถวสูตร</th><th style="width:70px"></th></tr></thead><tbody id="ptbl"></tbody></table></div>
+  <div class="scroll"><table><thead><tr><th>ชื่อสินค้า</th><th>รายละเอียด</th><th>จำนวนแถวสูตร</th><th style="width:150px"></th></tr></thead><tbody id="ptbl"></tbody></table></div>
 </div>
 
 <div class="card">
@@ -345,7 +345,7 @@ function updProducts(){
   $("curP").innerHTML=names.length?names.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join(""):`<option value="">— สร้างชื่อสินค้าก่อน —</option>`;
   if(names.includes(cur))$("curP").value=cur;else if(psel.size)$("curP").value=[...psel][0];
   $("pchips").innerHTML=`<button data-pc="" aria-pressed="${!psel.size}">ทุกสูตร</button>`+names.map(x=>`<button data-pc="${esc(x)}" aria-pressed="${psel.has(x)}">${esc(x)}</button>`).join("");
-  $("ptbl").innerHTML=products.length?products.map((x,i)=>`<tr><td><input type="text" data-pname="${i}" value="${esc(x.name)}" aria-label="ชื่อสินค้า"></td><td><input type="text" data-pnote="${i}" value="${esc(x.note||"")}" aria-label="รายละเอียด"></td><td class="n">${rows.filter(r=>r.p===x.name).length}</td><td><button class="d x" data-pdel="${i}" aria-label="ลบสินค้า ${esc(x.name)}">ลบ</button></td></tr>`).join(""):`<tr><td colspan="4" class="empty">ยังไม่มีสินค้า พิมพ์ชื่อด้านบนแล้วกด "+ สร้างสินค้า" ก่อนเพิ่มสูตร</td></tr>`;
+  $("ptbl").innerHTML=products.length?products.map((x,i)=>`<tr><td><input type="text" data-pname="${i}" value="${esc(x.name)}" aria-label="ชื่อสินค้า"></td><td><input type="text" data-pnote="${i}" value="${esc(x.note||"")}" aria-label="รายละเอียด"></td><td class="n">${rows.filter(r=>r.p===x.name).length}</td><td><button class="dn" data-pdup="${i}" aria-label="คัดลอกสูตร ${esc(x.name)}">คัดลอกสูตร</button> <button class="d x" data-pdel="${i}" aria-label="ลบสินค้า ${esc(x.name)}">ลบ</button></td></tr>`).join(""):`<tr><td colspan="4" class="empty">ยังไม่มีสินค้า พิมพ์ชื่อด้านบนแล้วกด "+ สร้างสินค้า" ก่อนเพิ่มสูตร</td></tr>`;
   $("addRow").disabled=!products.length;$("addRow").title=products.length?"":"สร้างชื่อสินค้าก่อน";
 }
 function drawTable(){updProducts();
@@ -539,8 +539,14 @@ $("ptbl").addEventListener("change",e=>{
   if(n!=null){products[+n].note=e.target.value;save();return}
   if(i==null)return;const old=products[+i].name,nn=e.target.value.trim();
   if(!nn||products.some((x,k)=>k!==+i&&x.name.toLowerCase()===nn.toLowerCase())){e.target.value=old;note("ชื่อสินค้าว่างหรือซ้ำกับสินค้าอื่น",false);return}
-  products[+i].name=nn;rows.forEach(r=>{if(r.p===old)r.p=nn});if(psel.has(old)){psel.delete(old);psel.add(nn)}save();drawTable()});
-$("ptbl").addEventListener("click",e=>{const i=e.target.dataset.pdel;if(i==null)return;
+  products[+i].name=nn;rows.forEach(r=>{if(r.p===old)r.p=nn});if(psel.has(old)){psel.delete(old);psel.add(nn)}save();drawTable();note(`เปลี่ยนชื่อสูตร "${old}" เป็น "${nn}" แล้ว (เป็นการเปลี่ยนชื่อสูตรเดิม ไม่ได้สร้างสูตรใหม่) ถ้าต้องการสูตรใหม่ ใช้ปุ่ม "คัดลอกสูตร"`,false)});
+$("ptbl").addEventListener("click",e=>{
+  const du=e.target.dataset.pdup;
+  if(du!=null){const src=products[+du];let nm=src.name+" (สำเนา)",k=2;while(products.some(x=>x.name.toLowerCase()===nm.toLowerCase()))nm=src.name+" (สำเนา "+(k++)+")";
+    products.splice(+du+1,0,{name:nm,note:src.note||""});
+    rows.filter(r=>r.p===src.name).forEach(r=>rows.push({...JSON.parse(JSON.stringify(r)),id:uid(),p:nm,done:false}));
+    save();drawTable();note(`คัดลอก "${src.name}" เป็น "${nm}" แล้ว แก้ชื่อและปริมาณของสูตรใหม่ได้เลย สูตรเดิมไม่เปลี่ยน`,false);return}
+  const i=e.target.dataset.pdel;if(i==null)return;
   const pn=products[+i].name,ids=new Set(rows.filter(r=>r.p===pn).map(r=>r.id));
   pending=()=>{snap();products.splice(+i,1);rows=rows.filter(r=>!ids.has(r.id));ids.forEach(id=>sel.delete(id));save();drawTable()};
   note(`ลบสินค้า "${pn}"${ids.size?` และสูตร ${ids.size} แถว`:""} ใช่ไหม (เลิกทำได้)`,true)});
