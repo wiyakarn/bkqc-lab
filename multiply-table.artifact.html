@@ -363,7 +363,7 @@ const grams=r=>{const f=fac(r.u,WU);return f==null?null:result(r)*f};
 const mls=r=>{const f=fac(r.u,VU);return f==null?null:result(r)*f};
 let undoStack=[];
 const snap=()=>{backup("ก่อนลบ/ล้าง");undoStack.push(JSON.stringify({cols,rows,products,chem,chemGone}));if(undoStack.length>20)undoStack.shift()};
-let tempUnit="C";try{tempUnit=localStorage.getItem("calcMaterials.tempUnit")||"C"}catch(e){}   // how the temperature unit is written: C, °C or °F (values are never converted)
+let tempUnit="°C";try{tempUnit=localStorage.getItem("calcMaterials.tempUnit")||"°C"}catch(e){}   // how the temperature unit is written: C, °C or °F (values are never converted)
 let showTemps=true;try{showTemps=localStorage.getItem("calcMaterials.showTemps")!=="0"}catch(e){}
 let showDates=true;try{showDates=localStorage.getItem("calcMaterials.showDates")!=="0"}catch(e){}
 const chemN=()=>showChem?chem.length:0;
