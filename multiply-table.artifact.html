@@ -124,7 +124,7 @@ tfoot td{background:var(--grn2);font-weight:700}
     <select id="newOp" aria-label="ฟังก์ชันของขั้นใหม่" style="width:auto;padding:7px"></select><button id="addCol">+ เพิ่มขั้นคำนวณ</button>
     <span style="display:inline-flex;gap:4px;align-items:center"><input type="text" id="kName" placeholder="ค่าเคมีใหม่ เช่น Aw" aria-label="ชื่อค่าเคมีใหม่" style="width:130px"><input type="text" id="kUnit" placeholder="หน่วย" aria-label="หน่วย" style="width:56px"><button id="kAdd">+ เพิ่มช่องค่าเคมี</button></span>
     <label class="chk"><input type="checkbox" id="kShow"> แสดงช่องค่าเคมี</label>
-    <label class="chk"><input type="checkbox" id="dShow"> แสดงวันผลิต/หมดอายุ</label>
+    <label class="chk"><input type="checkbox" id="dShow"> แสดง Lot / วันผลิต / หมดอายุ</label>
     <label class="chk"><input type="checkbox" id="all"> เลือกทั้งหมด</label>
     <span class="cnt" id="cnt"></span><span class="sp"></span>
     <label class="chk"><input type="checkbox" id="fx" checked> แสดงสูตร</label>
@@ -339,8 +339,8 @@ let undoStack=[];
 const snap=()=>{backup("ก่อนลบ/ล้าง");undoStack.push(JSON.stringify({cols,rows,products,chem}));if(undoStack.length>20)undoStack.shift()};
 let showDates=true;try{showDates=localStorage.getItem("calcMaterials.showDates")!=="0"}catch(e){}
 const chemN=()=>showChem?chem.length:0;
-const dateN=()=>showDates?2:0;
-const extraN=()=>chemN()+dateN();                  // columns between the result and the row buttons
+const preN=()=>showDates?3:0;                       // lot, manufacturing date, expiry date: right after the ingredient name
+const extraN=()=>chemN();                           // chemistry columns between the result and the row buttons
 const fmtD=iso=>{if(!iso)return "";const d=new Date(iso+"T00:00:00");return isNaN(d)?"":d.toLocaleDateString("th-TH")};
 const xlDate=iso=>{const [y,m,d]=iso.split("-").map(Number);return Math.round((Date.UTC(y,m-1,d)-Date.UTC(1899,11,30))/864e5)};
 const daysLeft=iso=>{if(!iso)return null;const d=new Date(iso+"T00:00:00");if(isNaN(d))return null;const t=new Date();t.setHours(0,0,0,0);return Math.round((d-t)/864e5)};
@@ -383,23 +383,23 @@ function updProducts(){
 }
 function drawTable(){updProducts();
   const nc=cols.length;
-  $("head").innerHTML=`<tr><th class="grp" colspan="3">① ชื่อสินค้า / รายชื่อวัตถุดิบ</th><th class="grp" colspan="2">② ปริมาณ</th><th class="grp" colspan="${Math.max(nc,1)}">③ ใส่ค่าคำนวณ (ทำเรียงซ้าย → ขวา)</th><th class="grp">④ ผลลัพธ์</th>${chemN()?`<th class="grp" colspan="${chemN()}">⑤ ค่าเคมี / คุณภาพ ของวัตถุดิบ</th>`:""}${showDates?`<th class="grp" colspan="2">⑥ วันผลิต / หมดอายุ</th>`:""}<th class="grp"></th></tr>
-  <tr><th style="width:34px"></th><th>ชื่อสินค้า</th><th>ชื่อวัตถุดิบ</th><th>ปริมาณ</th><th>หน่วย</th>${cols.map(c=>`<th><input type="text" data-cn="${c.id}" value="${esc(c.n)}" aria-label="ชื่อขั้นคำนวณ"><select data-co="${c.id}" aria-label="ฟังก์ชัน">${Object.entries(OPS).map(([k,o])=>`<option value="${k}"${k===c.op?" selected":""}>${o.l}</option>`).join("")}</select><button class="dn" data-cins="${c.id}" aria-label="แทรกขั้นใหม่ก่อน ${esc(c.n)}">＋ แทรกก่อน</button> <button class="d x" data-cdel="${c.id}" aria-label="ลบขั้น ${esc(c.n)}">ลบขั้นนี้</button></th>`).join("")||"<th>ยังไม่มีขั้นคำนวณ</th>"}<th>ผลลัพธ์</th>${showChem?chem.map(k=>`<th style="min-width:124px"><div class="kh"><input type="text" data-kn="${k.id}" value="${esc(k.n)}" aria-label="ชื่อค่า" title="ชื่อค่า"><input type="text" data-ku="${k.id}" value="${esc(k.u)}" placeholder="หน่วย" aria-label="หน่วย" title="หน่วย" style="max-width:52px"></div><label class="kc"><input type="checkbox" data-ka="${k.id}" ${k.avg?"checked":""}> เฉลี่ยตามน้ำหนัก</label><button class="d x" data-kdel="${k.id}" aria-label="ลบช่อง ${esc(k.n)}">ลบช่อง</button></th>`).join(""):""}${showDates?`<th>วันผลิต</th><th>หมดอายุ</th>`:""}<th style="width:170px"></th></tr>
-  <tr><th class="def" colspan="5">ค่าทุกแถว (ใช้เมื่อแถวนั้นเว้นว่าง)</th>${cols.map(c=>`<th class="def"><input type="number" data-cd="${c.id}" value="${c.d??""}" step="any" placeholder="${OPS[c.op].d}" aria-label="ค่าทุกแถว ${esc(c.n)}"></th>`).join("")||"<th class=\"def\"></th>"}<th class="def"></th>${showChem?chem.map(()=>`<th class="def"></th>`).join(""):""}${showDates?`<th class="def"></th><th class="def"></th>`:""}<th class="def"></th></tr>`;
+  $("head").innerHTML=`<tr><th class="grp" colspan="${3+preN()}">① ชื่อสินค้า / วัตถุดิบ${showDates?" / ล็อต / วันผลิต / หมดอายุ":""}</th><th class="grp" colspan="2">② ปริมาณ</th><th class="grp" colspan="${Math.max(nc,1)}">③ ใส่ค่าคำนวณ (ทำเรียงซ้าย → ขวา)</th><th class="grp">④ ผลลัพธ์</th>${chemN()?`<th class="grp" colspan="${chemN()}">⑤ ค่าเคมี / คุณภาพ ของวัตถุดิบ</th>`:""}<th class="grp"></th></tr>
+  <tr><th style="width:34px"></th><th>ชื่อสินค้า</th><th>ชื่อวัตถุดิบ</th>${showDates?`<th>ล็อต (Lot)</th><th>วันผลิต</th><th>หมดอายุ</th>`:""}<th>ปริมาณ</th><th>หน่วย</th>${cols.map(c=>`<th><input type="text" data-cn="${c.id}" value="${esc(c.n)}" aria-label="ชื่อขั้นคำนวณ"><select data-co="${c.id}" aria-label="ฟังก์ชัน">${Object.entries(OPS).map(([k,o])=>`<option value="${k}"${k===c.op?" selected":""}>${o.l}</option>`).join("")}</select><button class="dn" data-cins="${c.id}" aria-label="แทรกขั้นใหม่ก่อน ${esc(c.n)}">＋ แทรกก่อน</button> <button class="d x" data-cdel="${c.id}" aria-label="ลบขั้น ${esc(c.n)}">ลบขั้นนี้</button></th>`).join("")||"<th>ยังไม่มีขั้นคำนวณ</th>"}<th>ผลลัพธ์</th>${showChem?chem.map(k=>`<th style="min-width:124px"><div class="kh"><input type="text" data-kn="${k.id}" value="${esc(k.n)}" aria-label="ชื่อค่า" title="ชื่อค่า"><input type="text" data-ku="${k.id}" value="${esc(k.u)}" placeholder="หน่วย" aria-label="หน่วย" title="หน่วย" style="max-width:52px"></div><label class="kc"><input type="checkbox" data-ka="${k.id}" ${k.avg?"checked":""}> เฉลี่ยตามน้ำหนัก</label><button class="d x" data-kdel="${k.id}" aria-label="ลบช่อง ${esc(k.n)}">ลบช่อง</button></th>`).join(""):""}<th style="width:170px"></th></tr>
+  <tr><th class="def" colspan="${5+preN()}">ค่าทุกแถว (ใช้เมื่อแถวนั้นเว้นว่าง)</th>${cols.map(c=>`<th class="def"><input type="number" data-cd="${c.id}" value="${c.d??""}" step="any" placeholder="${OPS[c.op].d}" aria-label="ค่าทุกแถว ${esc(c.n)}"></th>`).join("")||"<th class=\"def\"></th>"}<th class="def"></th>${showChem?chem.map(()=>`<th class="def"></th>`).join(""):""}<th class="def"></th></tr>`;
   const emptyP=psel.size?[...psel].filter(n=>!vis().some(r=>(r.p||NOP)===n)):[];
-  const emptyRows=emptyP.map(n=>`<tr class="done"><td></td><td colspan="${Math.max(cols.length,1)+5+extraN()}"><b>${esc(n)}</b> ยังไม่มีวัตถุดิบ <button class="dn" data-addto="${esc(n)}">＋ เพิ่มวัตถุดิบให้สูตรนี้</button></td></tr>`).join("");
+  const emptyRows=emptyP.map(n=>`<tr class="done"><td></td><td colspan="${Math.max(cols.length,1)+5+preN()+extraN()}"><b>${esc(n)}</b> ยังไม่มีวัตถุดิบ <button class="dn" data-addto="${esc(n)}">＋ เพิ่มวัตถุดิบให้สูตรนี้</button></td></tr>`).join("");
   $("rows").innerHTML=(vis().length||emptyRows)?vis().map(r=>`<tr data-r="${r.id}" class="${sel.has(r.id)?"sel":""}${r.done?" done":""}">
     <td><input type="checkbox" data-id="${r.id}" ${sel.has(r.id)?"checked":""} aria-label="เลือก"></td>
     <td><select data-f="p" data-r="${r.id}" aria-label="ชื่อสินค้า" style="min-width:100px;padding:2px 3px;font-size:13px;border:1px solid var(--brd);border-radius:5px;background:var(--sur2);color:var(--tx)">${products.map(x=>`<option value="${esc(x.name)}"${x.name===r.p?" selected":""}>${esc(x.name)}</option>`).join("")}</select></td>
     <td><input type="text" data-f="n" data-r="${r.id}" value="${esc(r.n)}" placeholder="พิมพ์ชื่อรายการ" aria-label="ชื่อรายการ"></td>
+    ${showDates?`<td><input type="text" data-f="lot" data-r="${r.id}" value="${esc(r.lot||"")}" placeholder="Lot" aria-label="ล็อต" style="min-width:84px"></td><td><input type="date" data-f="mfg" data-r="${r.id}" value="${esc(r.mfg||"")}" aria-label="วันผลิต" style="min-width:128px"></td><td><input type="date" data-f="exp" data-r="${r.id}" value="${esc(r.exp||"")}" aria-label="วันหมดอายุ" style="min-width:128px"><span class="dtx" data-exps="${r.id}">${expText(r)}</span></td>`:""}
     <td><input type="number" data-f="q" data-r="${r.id}" value="${r.q||""}" min="0" step="any" aria-label="ปริมาณ"></td>
     <td><input type="text" data-f="u" data-r="${r.id}" value="${esc(r.u)}" style="min-width:60px" aria-label="หน่วย"></td>
     ${cols.map(c=>`<td><input type="number" data-m="${c.id}" data-r="${r.id}" value="${r.m[c.id]??""}" step="any" placeholder="${OPS[c.op].d}" aria-label="${esc(c.n)}"></td>`).join("")}
     <td class="n f" data-res="${r.id}"></td>
     ${showChem?chem.map(k=>`<td><input type="number" data-kc="${k.id}" data-r="${r.id}" value="${(r.c||{})[k.id]??""}" step="any" aria-label="${esc(k.n)}" style="max-width:80px"></td>`).join(""):""}
-    ${showDates?`<td><input type="date" data-f="mfg" data-r="${r.id}" value="${esc(r.mfg||"")}" aria-label="วันผลิต" style="min-width:128px"></td><td><input type="date" data-f="exp" data-r="${r.id}" value="${esc(r.exp||"")}" aria-label="วันหมดอายุ" style="min-width:128px"><span class="dtx" data-exps="${r.id}">${expText(r)}</span></td>`:""}
     <td style="white-space:nowrap"><button class="dn" data-ins="${r.id}" aria-label="แทรกแถวใหม่ใต้แถวนี้">＋ แทรก</button> <button class="dn" data-done="${r.id}" aria-label="${r.done?"เรียกคืน":"เสร็จแล้ว"}">${r.done?"↩ เรียกคืน":"🙈 ซ่อน (เสร็จ)"}</button> <button class="d x" data-rdel="${r.id}" aria-label="ลบรายการ">✕</button></td></tr>`).join("")+emptyRows
-    :`<tr><td colspan="${Math.max(cols.length,1)+6+extraN()}" class="empty">${rows.length?"ทุกรายการเสร็จแล้ว (ซ่อนอยู่) ติ๊ก \"แสดงที่เสร็จแล้ว\" เพื่อดู":"ยังไม่มีรายการ กด \"+ เพิ่มรายการ\""}</td></tr>`;
+    :`<tr><td colspan="${Math.max(cols.length,1)+6+preN()+extraN()}" class="empty">${rows.length?"ทุกรายการเสร็จแล้ว (ซ่อนอยู่) ติ๊ก \"แสดงที่เสร็จแล้ว\" เพื่อดู":"ยังไม่มีรายการ กด \"+ เพิ่มรายการ\""}</td></tr>`;
   refresh();
 }
 // live recalculation without rebuilding inputs (keeps cursor while typing)
@@ -422,10 +422,10 @@ function refresh(){
   const rc=L(4+cols.length);
   const wg=c.reduce((a,r)=>a+(grams(r)||0),0),wl=c.reduce((a,r)=>a+(mls(r)||0),0);
   const other=c.filter(r=>grams(r)==null&&mls(r)==null);
-  const wtxt=wg?`${fq(wg)} กรัม = ${fq(wg/1000)} กก.`:"-",wcols=4+Math.max(cols.length,1);
+  const wtxt=wg?`${fq(wg)} กรัม = ${fq(wg/1000)} กก.`:"-",wcols=4+preN()+Math.max(cols.length,1);
   const wrow=!wg?"":`<tr><td></td><td colspan="${wcols}">รวมน้ำหนัก (แปลง กรัม/กก./ขีด/มก. ให้อัตโนมัติ)${other.length?` · ไม่นับ ${other.length} แถวที่หน่วยไม่ใช่น้ำหนัก: ${esc([...new Set(other.map(r=>(r.n||"-")+" ("+(r.u||"ไม่มีหน่วย")+")"))].join(", "))}`:""}</td><td class="n f" id="wtot">${wtxt}${fx&&wg?`<span class="fx">=SUM(น้ำหนักกรัม) ÷ 1000</span>`:""}</td><td colspan="${extraN()+1}"></td></tr>`;
   const vrow=wl?`<tr><td></td><td colspan="${wcols}">รวมปริมาตร (มล./ลิตร)</td><td class="n f">${fq(wl)} มล. = ${fq(wl/1000)} ลิตร</td><td colspan="${extraN()+1}"></td></tr>`:"";
-  $("foot").innerHTML=rows.length?`<tr><td></td><td colspan="${4+Math.max(cols.length,1)}">รวมผลลัพธ์ ${c.length} แถว${units.size>1?" (หน่วยต่างกัน ดูตารางรวมด้านล่าง)":""}</td><td class="n">${units.size>1?"-":fq(tot)}${fx&&units.size<=1?`<span class="fx">=SUM(${rc}2:${rc}${c.length+1})</span>`:""}</td><td colspan="${extraN()+1}"></td></tr>${wrow}${vrow}`:"";
+  $("foot").innerHTML=rows.length?`<tr><td></td><td colspan="${4+preN()+Math.max(cols.length,1)}">รวมผลลัพธ์ ${c.length} แถว${units.size>1?" (หน่วยต่างกัน ดูตารางรวมด้านล่าง)":""}</td><td class="n">${units.size>1?"-":fq(tot)}${fx&&units.size<=1?`<span class="fx">=SUM(${rc}2:${rc}${c.length+1})</span>`:""}</td><td colspan="${extraN()+1}"></td></tr>${wrow}${vrow}`:"";
   const wpl=weightByProduct(c).filter(x=>x.g);$("wbox").hidden=!(wpl.length>1);
   $("wprod").innerHTML=c.length?weightByProduct(c).map(x=>`<tr><td>${esc(x.p)}</td><td class="n">${x.c}</td><td class="n f">${x.g?fq(x.g):"-"}</td><td class="n">${x.g?fq(x.g/1000):"-"}</td></tr>`).join(""):`<tr><td colspan="4" class="empty">—</td></tr>`;
   const mxh=(byProduct(c).length>=2)?matrixHtml(c):"";
@@ -474,6 +474,7 @@ const num=v=>{const x=parseFloat(v);return isNaN(x)?undefined:x};
 $("rows").addEventListener("input",e=>{
   const t=e.target,id=+t.dataset.r;if(!id)return;const r=rows.find(x=>x.id===id);
   if(t.dataset.f==="mfg"||t.dataset.f==="exp"){r[t.dataset.f]=t.value;const el=document.querySelector(`[data-exps="${r.id}"]`);if(el)el.innerHTML=expText(r);save();return}
+  if(t.dataset.f==="lot"){r.lot=t.value;save();return}
   if(t.dataset.f==="n"||t.dataset.f==="u"||t.dataset.f==="p"){r[t.dataset.f]=t.value;if(t.dataset.f==="p")updProducts()}
   else if(t.dataset.f==="q")r.q=num(t.value)||0;
   else if(t.dataset.m){const v=num(t.value);if(v===undefined)delete r.m[t.dataset.m];else r.m[t.dataset.m]=v}
@@ -631,12 +632,13 @@ const byProduct=c=>{const want=psel.size?[...psel]:products.map(x=>x.name);
 function buildCalc(c,withP){
   const act=activeCols(c),hasU=c.some(r=>(r.u||"").trim()),hasW=c.some(r=>fac(r.u,WU)!=null);
   const spec=[];if(withP)spec.push({k:"p",h:"ชื่อสินค้า"});
-  spec.push({k:"n",h:"ชื่อวัตถุดิบ"},{k:"q",h:"ปริมาณ"});if(hasU)spec.push({k:"u",h:"หน่วย"});
+  const hasLot=c.some(r=>(r.lot||"").trim()),hasMfg=c.some(r=>r.mfg),hasExp=c.some(r=>r.exp);
+  spec.push({k:"n",h:"ชื่อวัตถุดิบ"});
+  if(hasLot)spec.push({k:"lot",h:"Lot"});if(hasMfg)spec.push({k:"mfg",h:"วันผลิต"});if(hasExp){spec.push({k:"exp",h:"หมดอายุ"});spec.push({k:"left",h:"เหลือ (วัน)"})}
+  spec.push({k:"q",h:"ปริมาณ"});if(hasU)spec.push({k:"u",h:"หน่วย"});
   act.forEach(x=>spec.push({k:"s",col:x,h:`${x.n} (${OPS[x.op].l})`}));
   spec.push({k:"r",h:"ผลลัพธ์"});if(hasW)spec.push({k:"w",h:"น้ำหนัก (กรัม)"});
   const kcol=chem.filter(k=>chemHas(c,k));kcol.forEach(k=>spec.push({k:"kc",kk:k,h:kLabel(k)}));       // chemistry columns only when some row has a value
-  const hasMfg=c.some(r=>r.mfg),hasExp=c.some(r=>r.exp);
-  if(hasMfg)spec.push({k:"mfg",h:"วันผลิต"});if(hasExp){spec.push({k:"exp",h:"หมดอายุ"});spec.push({k:"left",h:"เหลือ (วัน)"})}
   const LT={};spec.forEach((x,i)=>{x.l=L(i);LT[x.k==="s"?"s"+x.col.id:x.k==="kc"?"kc"+x.kk.id:x.k]=x.l});
   const ws={};spec.forEach(x=>ws[x.l+"1"]={t:"s",v:x.h});
   c.forEach((r,k)=>{const q=k+2;
@@ -646,6 +648,7 @@ function buildCalc(c,withP){
     ws[LT.r+q]={t:"n",v:result(r),f:e};
     const wf=fac(r.u,WU);if(hasW&&wf!=null)ws[LT.w+q]={t:"n",v:result(r)*wf,f:`${LT.r}${q}*${wf}`};
     kcol.forEach(k=>{const v=(r.c||{})[k.id];if(v!==undefined)ws[LT["kc"+k.id]+q]={t:"n",v}});
+    if(hasLot&&(r.lot||"").trim())ws[LT.lot+q]={t:"s",v:r.lot.trim()};
     if(hasMfg&&r.mfg)ws[LT.mfg+q]={t:"n",v:xlDate(r.mfg),z:"dd/mm/yyyy"};
     if(hasExp&&r.exp){ws[LT.exp+q]={t:"n",v:xlDate(r.exp),z:"dd/mm/yyyy"};const n=daysLeft(r.exp);ws[LT.left+q]={t:"n",v:n,f:`IF(${LT.exp}${q}="","",${LT.exp}${q}-TODAY())`}}});
   const last=c.length+1,tr=last+1,first=spec[0].l;
@@ -761,13 +764,13 @@ const wtxtOf=c=>{const g=gsum(c);return `${fq(g)} กรัม (${fq(g/1000)} �
 function productBlock(name,rs){
   if(!rs.length)return `<h2 style="margin:16px 0 6px">${esc(name)}</h2><div style="color:#555;margin:4px 0 8px">ยังไม่มีวัตถุดิบในสูตรนี้</div>`;
   const act=activeCols(rs),hasU=rs.some(r=>(r.u||"").trim()),units=new Set(rs.map(r=>r.u.trim())),tot=rs.reduce((a,r)=>a+result(r),0);
-  const hasMfg=rs.some(r=>r.mfg),hasExp=rs.some(r=>r.exp),g=gsum(rs),kc=chem.filter(k=>chemHas(rs,k)),pr=products.find(x=>x.name===name)||{},meas=chem.filter(k=>(pr.meas||{})[k.id]!==undefined);
+  const hasLot=rs.some(r=>(r.lot||"").trim()),hasMfg=rs.some(r=>r.mfg),hasExp=rs.some(r=>r.exp),npre=(hasLot?1:0)+(hasMfg?1:0)+(hasExp?1:0),g=gsum(rs),kc=chem.filter(k=>chemHas(rs,k)),pr=products.find(x=>x.name===name)||{},meas=chem.filter(k=>(pr.meas||{})[k.id]!==undefined);
   const est=chem.filter(k=>k.avg&&chemHas(rs,k)&&chemEst(rs,k)!=null);
-  const bodyK=rs.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.n)}</td><td class="n">${fq(r.q)}</td>${hasU?`<td>${esc(r.u)}</td>`:""}${act.map(x=>`<td class="n">${fq(eff(r,x))}</td>`).join("")}<td class="n f">${fq(result(r))}</td>${kc.map(k2=>`<td class="n">${(r.c||{})[k2.id]!==undefined?fq3((r.c||{})[k2.id]):""}</td>`).join("")}${hasMfg?`<td>${fmtD(r.mfg)}</td>`:""}${hasExp?`<td>${fmtD(r.exp)}</td>`:""}</tr>`).join("");
+  const bodyK=rs.map((r,k)=>`<tr><td>${k+1}</td><td>${esc(r.n)}</td>${hasLot?`<td>${esc(r.lot||"")}</td>`:""}${hasMfg?`<td>${fmtD(r.mfg)}</td>`:""}${hasExp?`<td>${fmtD(r.exp)}</td>`:""}<td class="n">${fq(r.q)}</td>${hasU?`<td>${esc(r.u)}</td>`:""}${act.map(x=>`<td class="n">${fq(eff(r,x))}</td>`).join("")}<td class="n f">${fq(result(r))}</td>${kc.map(k2=>`<td class="n">${(r.c||{})[k2.id]!==undefined?fq3((r.c||{})[k2.id]):""}</td>`).join("")}</tr>`).join("");
   const chemLines=(meas.length?`<div style="margin:4px 0"><b>ค่าที่วัดได้ของสินค้า:</b> ${meas.map(k=>`${esc(k.n)} ${fq3(pr.meas[k.id])}${k.u?" "+esc(k.u):""}`).join(" · ")}</div>`:"")+(est.length?`<div style="margin:4px 0;color:#555"><b>ค่าเฉลี่ยถ่วงน้ำหนักจากส่วนผสม (ประมาณ):</b> ${est.map(k=>`${esc(k.n)} ${fq3(chemEst(rs,k))}${k.u?" "+esc(k.u):""}`).join(" · ")}</div>`:"");
   return `<h2 style="margin:16px 0 6px">${esc(name)}</h2>
-  <table><thead><tr><th>#</th><th>ชื่อวัตถุดิบ</th><th>ปริมาณ</th>${hasU?"<th>หน่วย</th>":""}${act.map(x=>`<th>${esc(x.n)}<br><small>${OPS[x.op].l}</small></th>`).join("")}<th>ผลลัพธ์</th>${kc.map(k2=>`<th>${esc(k2.n)}${k2.u?`<br><small>${esc(k2.u)}</small>`:""}</th>`).join("")}${hasMfg?"<th>วันผลิต</th>":""}${hasExp?"<th>หมดอายุ</th>":""}</tr></thead><tbody>${bodyK}</tbody>
-  ${rs.length>1&&units.size<=1?`<tfoot><tr><td colspan="${3+(hasU?1:0)+act.length}">รวม</td><td class="n">${fq(tot)}</td>${kc.length+(hasMfg?1:0)+(hasExp?1:0)?`<td colspan="${kc.length+(hasMfg?1:0)+(hasExp?1:0)}"></td>`:""}</tr></tfoot>`:""}</table>
+  <table><thead><tr><th>#</th><th>ชื่อวัตถุดิบ</th>${hasLot?"<th>Lot</th>":""}${hasMfg?"<th>วันผลิต</th>":""}${hasExp?"<th>หมดอายุ</th>":""}<th>ปริมาณ</th>${hasU?"<th>หน่วย</th>":""}${act.map(x=>`<th>${esc(x.n)}<br><small>${OPS[x.op].l}</small></th>`).join("")}<th>ผลลัพธ์</th>${kc.map(k2=>`<th>${esc(k2.n)}${k2.u?`<br><small>${esc(k2.u)}</small>`:""}</th>`).join("")}</tr></thead><tbody>${bodyK}</tbody>
+  ${rs.length>1&&units.size<=1?`<tfoot><tr><td colspan="${3+npre+(hasU?1:0)+act.length}">รวม</td><td class="n">${fq(tot)}</td>${kc.length?`<td colspan="${kc.length}"></td>`:""}</tr></tfoot>`:""}</table>
   ${g?`<div style="margin:6px 0"><b>รวมน้ำหนัก ${esc(name)}:</b> ${wtxtOf(rs)}</div>${exNote(rs)}`:""}${chemLines}`;
 }
 function summaryBlock(c){
