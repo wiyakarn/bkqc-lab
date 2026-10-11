@@ -182,11 +182,14 @@ const OPS={
  up:{l:"ปัดขึ้น (ทศนิยม)",d:0,f:(a,v)=>{const m=Math.pow(10,v);return Math.ceil(a*m-1e-9)/m},x:(e,c)=>`ROUNDUP(${e},${c})`}
 };
 // chemistry / quality fields (%Brix, pH, Salt, Viscosity ...): the list of fields is editable; every ingredient row and every recipe can hold a value for each field
-const DEFAULT_CHEM=()=>[{id:"k_brix",n:"%Brix",u:"°Bx",avg:true},{id:"k_ph",n:"pH",u:"",avg:false},{id:"k_salt",n:"Salt",u:"%",avg:true},{id:"k_visc",n:"Viscosity",u:"cP",avg:false}];
+const DEFAULT_CHEM=()=>[{id:"k_brix",n:"%Brix",u:"°Bx",avg:true},{id:"k_ph",n:"pH",u:"",avg:false},{id:"k_salt",n:"Salt",u:"%",avg:true},{id:"k_visc",n:"Viscosity",u:"cP",avg:false},{id:"k_temp",n:"อุณหภูมิที่วัด",u:"°C",avg:false}];
+// version 1 added the temperature field; data saved before that gets it once, and deleting it later sticks
+let chemVer=1;
+function migrateChem(){if(chemVer<1){if(!chem.some(k=>k.id==="k_temp"))chem.push({id:"k_temp",n:"อุณหภูมิที่วัด",u:"°C",avg:false});chemVer=1}}
 let cols=[],rows=[],products=[],chem=DEFAULT_CHEM(),sel=new Set(),pending=null,showDone=false;
 let showChem=true;try{showChem=localStorage.getItem("calcMaterials.showChem")!=="0"}catch(e){}
 let updated=0,hadState=false,seeded=false,editedSinceSeed=false;
-try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s){cols=s.cols||[];rows=s.rows||[];products=s.products||[];chem=Array.isArray(s.chem)?s.chem:DEFAULT_CHEM();showDone=!!s.showDone;updated=s.updated||0;hadState=true}}catch(e){}
+try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s){cols=s.cols||[];rows=s.rows||[];products=s.products||[];chem=Array.isArray(s.chem)?s.chem:DEFAULT_CHEM();chemVer=Array.isArray(s.chem)?(s.chemVer||0):1;migrateChem();showDone=!!s.showDone;updated=s.updated||0;hadState=true}}catch(e){}
 if(!hadState&&!cols.length){
   seeded=true;
   cols=[{id:"c1",op:"mul",n:"จำนวนที่ผลิต",d:200},{id:"c2",op:"inc",n:"เผื่อสูญเสีย %",d:5},{id:"c3",op:"up",n:"ปัดเศษขึ้น",d:0}];
@@ -199,7 +202,7 @@ let cloudDoc=null,cloudReady=false,cloudBusy=false,cloudDirty=false,cloudTimer=n
 const hhmm=()=>new Date().toLocaleTimeString("th-TH");
 const BKEY="calcMaterials.backups";
 function setSt(txt,cls){$("saveSt").className="savest "+(cls||"");$("saveTx").textContent=txt}
-const stateNow=()=>({cols,rows,products,chem,showDone});
+const stateNow=()=>({cols,rows,products,chem,chemVer,showDone});
 const core=st=>JSON.stringify({c:st.cols||[],r:st.rows||[],p:st.products||[],k:Array.isArray(st.chem)?st.chem:DEFAULT_CHEM()});
 // every formula row belongs to a created product; older data gets its products created from the names already used
 function ensureProducts(){
@@ -274,7 +277,7 @@ async function pushCloud(){
   cloudBusy=false;if(cloudDirty){cloudDirty=false;pushCloud()}
 }
 $("saveNow").onclick=async()=>{save();backup("กดบันทึก");clearTimeout(cloudTimer);if(cloudDoc&&cloudReady)await pushCloud();note("บันทึกรายการแล้ว · "+hhmm()+(cloudDoc&&cloudReady?" (ขึ้นบัญชีของคุณด้วย)":" (ในเบราว์เซอร์นี้)"),false)};
-function adopt(st,t){st=JSON.parse(JSON.stringify(st));cols=st.cols||[];rows=st.rows||[];products=st.products||[];chem=Array.isArray(st.chem)?st.chem:DEFAULT_CHEM();ensureProducts();if(st.showDone!==undefined)showDone=!!st.showDone;updated=t||Date.now();
+function adopt(st,t){st=JSON.parse(JSON.stringify(st));cols=st.cols||[];rows=st.rows||[];products=st.products||[];chem=Array.isArray(st.chem)?st.chem:DEFAULT_CHEM();chemVer=Array.isArray(st.chem)?(st.chemVer||0):1;migrateChem();ensureProducts();if(st.showDone!==undefined)showDone=!!st.showDone;updated=t||Date.now();
   try{localStorage.setItem(KEY,JSON.stringify({...stateNow(),updated}))}catch(e){}}
 // union of two versions: everything from base plus whatever extra has that base lacks (products by name, rows and steps by id)
 function mergeStates(base,extra){
@@ -519,7 +522,7 @@ $("rows").addEventListener("click",e=>{const id=e.target.dataset.ins;if(!id)retu
 $("head").addEventListener("click",e=>{const id=e.target.dataset.cins;if(!id)return;
   const i=cols.findIndex(c=>c.id===id);cols.splice(i,0,newCol($("newOp").value));save();drawTable()});
 $("expBk").onclick=async()=>{
-  const data=JSON.stringify({app:"calcMaterials",version:1,exported:Date.now(),cols,rows,products,chem,showDone,backups:backups.slice(0,10)},null,1);
+  const data=JSON.stringify({app:"calcMaterials",version:1,exported:Date.now(),cols,rows,products,chem,chemVer,showDone,backups:backups.slice(0,10)},null,1);
   await saveFile(`สำรองสูตร_${stamp()}.json`,data)};
 $("impBk").onclick=()=>$("impFile").click();
 $("impFile").onchange=e=>{
