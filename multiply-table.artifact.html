@@ -97,11 +97,17 @@ tfoot td{background:var(--grn2);font-weight:700}
   <div class="bar">
     <div style="min-width:180px;flex:1"><label for="curP">เพิ่มสูตรให้สินค้า</label><select id="curP" style="width:100%;padding:6px;border:1px solid var(--brd);border-radius:6px;font:inherit;background:var(--sur2);color:var(--tx)"></select></div>
     <div style="flex:2;min-width:220px"><label>เลือกสูตรที่จะแสดง / ส่งออก (เลือกได้หลายสูตร)</label><div class="modes" id="pchips" style="margin:2px 0 0"></div></div>
+    <button id="kpBtn">⚙ จัดการช่องค่าเคมี</button>
     <button id="hidBtn">👁 รายการที่ซ่อนไว้ <b id="hidN">(0)</b></button>
     <button id="histBtn">🕘 ประวัติ / กู้คืน</button>
     <button class="d" id="cleanBtn">🧹 ลบข้อมูลที่ไม่ใช้</button>
     <button class="d" id="clearAll">ล้างทั้งหมด</button>
     <button id="undoDel" hidden>↶ เลิกทำการลบ</button>
+  </div>
+  <div class="msg" id="kpanel" hidden style="display:block">
+    <div style="font-weight:600;margin-bottom:4px">จัดการช่องค่าเคมี</div>
+    <div class="scroll"><table><thead><tr><th>ชื่อช่อง</th><th>หน่วย</th><th>เฉลี่ยตามน้ำหนัก</th><th>จำนวนค่าที่กรอก</th><th style="width:110px"></th></tr></thead><tbody id="kRows"></tbody></table></div>
+    <div class="bar" style="margin:8px 0 0"><button id="kpX">ปิด</button><span class="cnt">ลบช่องแล้วค่าที่กรอกในช่องนั้นหายด้วย กด "↶ เลิกทำการลบ" ได้ · เพิ่มช่องใหม่ได้ที่ปุ่ม "+ เพิ่มช่องค่าเคมี"</span></div>
   </div>
   <div class="msg" id="hid" hidden style="display:block">
     <div style="font-weight:600;margin-bottom:4px">รายการที่ซ่อนไว้ (กด "ซ่อน (เสร็จ)" ที่แถวเพื่อซ่อน)</div>
@@ -186,12 +192,12 @@ const OPS={
 // chemistry / quality fields (%Brix, pH, Salt, Viscosity ...): the list of fields is editable; every ingredient row and every recipe can hold a value for each field
 const DEFAULT_CHEM=()=>[{id:"k_brix",n:"%Brix",u:"°Bx",avg:true},{id:"k_ph",n:"pH",u:"",avg:false},{id:"k_salt",n:"Salt",u:"%",avg:true},{id:"k_visc",n:"Viscosity",u:"cP",avg:false}];
 // version 2: the temperature is recorded per value (next to each value), so the stand-alone temperature field of version 1 is dropped when nothing was typed in it
-let chemVer=2;
+let chemVer=2,chemGone=[];
 function migrateChem(){if(chemVer<2){if(chem.some(k=>k.id==="k_temp")&&!rows.some(r=>(r.c||{}).k_temp!==undefined)&&!products.some(x=>(x.meas||{}).k_temp!==undefined))chem=chem.filter(k=>k.id!=="k_temp");chemVer=2}}
 let cols=[],rows=[],products=[],chem=DEFAULT_CHEM(),sel=new Set(),pending=null,showDone=false;
 let showChem=true;try{showChem=localStorage.getItem("calcMaterials.showChem")!=="0"}catch(e){}
 let updated=0,hadState=false,seeded=false,editedSinceSeed=false;
-try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s){cols=s.cols||[];rows=s.rows||[];products=s.products||[];chem=Array.isArray(s.chem)?s.chem:DEFAULT_CHEM();chemVer=Array.isArray(s.chem)?(s.chemVer||0):2;migrateChem();showDone=!!s.showDone;updated=s.updated||0;hadState=true}}catch(e){}
+try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s){cols=s.cols||[];rows=s.rows||[];products=s.products||[];chem=Array.isArray(s.chem)?s.chem:DEFAULT_CHEM();chemVer=Array.isArray(s.chem)?(s.chemVer||0):2;chemGone=Array.isArray(s.chemGone)?s.chemGone:[];chem=chem.filter(k=>!chemGone.includes(k.id));migrateChem();showDone=!!s.showDone;updated=s.updated||0;hadState=true}}catch(e){}
 if(!hadState&&!cols.length){
   seeded=true;
   cols=[{id:"c1",op:"mul",n:"จำนวนที่ผลิต",d:200},{id:"c2",op:"inc",n:"เผื่อสูญเสีย %",d:5},{id:"c3",op:"up",n:"ปัดเศษขึ้น",d:0}];
@@ -204,7 +210,7 @@ let cloudDoc=null,cloudReady=false,cloudBusy=false,cloudDirty=false,cloudTimer=n
 const hhmm=()=>new Date().toLocaleTimeString("th-TH");
 const BKEY="calcMaterials.backups";
 function setSt(txt,cls){$("saveSt").className="savest "+(cls||"");$("saveTx").textContent=txt}
-const stateNow=()=>({cols,rows,products,chem,chemVer,showDone});
+const stateNow=()=>({cols,rows,products,chem,chemVer,chemGone,showDone});
 const core=st=>JSON.stringify({c:st.cols||[],r:st.rows||[],p:st.products||[],k:Array.isArray(st.chem)?st.chem:DEFAULT_CHEM()});
 // every formula row belongs to a created product; older data gets its products created from the names already used
 function ensureProducts(){
@@ -227,7 +233,7 @@ function save(){
   const stored=readLocal();
   if(stored&&stored.updated>updated&&core(stored)!==core(stateNow())){   // another tab saved a newer version since this tab last synced
     backup("ข้อมูลหน้านี้ (ก่อนรวม)");backup("ข้อมูลจากอีกหน้าต่าง",stored);
-    const mg=mergeLatest(stored,stateNow());cols=mg.cols;rows=mg.rows;products=mg.products;chem=mg.chem;ensureProducts();
+    const mg=mergeLatest(stored,stateNow());cols=mg.cols;rows=mg.rows;products=mg.products;chem=mg.chem;chemGone=mg.chemGone;ensureProducts();
     setTimeout(()=>{drawTable();note("พบว่ามีการแก้ข้อมูลจากอีกหน้าต่าง จึงรวมข้อมูลให้แล้ว ไม่มีอะไรหาย ดูย้อนหลังที่ 🕘 ประวัติ / กู้คืน",false)},0);
   }
   updated=Date.now();editedSinceSeed=true;
@@ -242,7 +248,7 @@ function readLocal(){try{return JSON.parse(localStorage.getItem(KEY)||"null")}ca
 // two versions of the same data: everything from both; where the same row/step/recipe exists in both, "mine" (the edit just made) wins
 function mergeLatest(stored,mine){
   const by=(a,b,k)=>{const m=new Map();(a||[]).forEach(x=>m.set(x[k],x));(b||[]).forEach(x=>m.set(x[k],x));return [...m.values()]};
-  return{cols:by(stored.cols,mine.cols,"id"),rows:by(stored.rows,mine.rows,"id"),products:by(stored.products,mine.products,"name"),chem:by(stored.chem||[],mine.chem||[],"id"),showDone:mine.showDone};
+  return{cols:by(stored.cols,mine.cols,"id"),rows:by(stored.rows,mine.rows,"id"),products:by(stored.products,mine.products,"name"),chem:by(stored.chem||[],mine.chem||[],"id").filter(k=>![...(stored.chemGone||[]),...(mine.chemGone||[])].includes(k.id)),chemGone:[...new Set([...(stored.chemGone||[]),...(mine.chemGone||[])])],showDone:mine.showDone};
 }
 let cloudSeen=0,cloudBk=null,lastBkSig="";
 // pull in newer data written by another tab or device before this tab can overwrite it
@@ -279,7 +285,7 @@ async function pushCloud(){
   cloudBusy=false;if(cloudDirty){cloudDirty=false;pushCloud()}
 }
 $("saveNow").onclick=async()=>{save();backup("กดบันทึก");clearTimeout(cloudTimer);if(cloudDoc&&cloudReady)await pushCloud();note("บันทึกรายการแล้ว · "+hhmm()+(cloudDoc&&cloudReady?" (ขึ้นบัญชีของคุณด้วย)":" (ในเบราว์เซอร์นี้)"),false)};
-function adopt(st,t){st=JSON.parse(JSON.stringify(st));cols=st.cols||[];rows=st.rows||[];products=st.products||[];chem=Array.isArray(st.chem)?st.chem:DEFAULT_CHEM();chemVer=Array.isArray(st.chem)?(st.chemVer||0):2;migrateChem();ensureProducts();if(st.showDone!==undefined)showDone=!!st.showDone;updated=t||Date.now();
+function adopt(st,t){st=JSON.parse(JSON.stringify(st));cols=st.cols||[];rows=st.rows||[];products=st.products||[];chem=Array.isArray(st.chem)?st.chem:DEFAULT_CHEM();chemVer=Array.isArray(st.chem)?(st.chemVer||0):2;chemGone=Array.isArray(st.chemGone)?st.chemGone:[];chem=chem.filter(k=>!chemGone.includes(k.id));migrateChem();ensureProducts();if(st.showDone!==undefined)showDone=!!st.showDone;updated=t||Date.now();
   try{localStorage.setItem(KEY,JSON.stringify({...stateNow(),updated}))}catch(e){}}
 // union of two versions: everything from base plus whatever extra has that base lacks (products by name, rows and steps by id)
 function mergeStates(base,extra){
@@ -288,7 +294,7 @@ function mergeStates(base,extra){
   (extra.products||[]).forEach(x=>{if(!pn.has(x.name.toLowerCase())){m.products.push(x);pn.add(x.name.toLowerCase())}});
   (extra.rows||[]).forEach(r=>{if(!ri.has(r.id)){m.rows.push(r);ri.add(r.id)}});
   (extra.cols||[]).forEach(c=>{if(!ci.has(c.id)){m.cols.push(c);ci.add(c.id)}});
-  const ki=new Set(m.chem.map(k=>k.id));(extra.chem||[]).forEach(k=>{if(!ki.has(k.id)){m.chem.push(k);ki.add(k.id)}});
+  const gone=new Set([...(base.chemGone||[]),...(extra.chemGone||[])]),ki=new Set(m.chem.map(k=>k.id));(extra.chem||[]).forEach(k=>{if(!ki.has(k.id)&&!gone.has(k.id)){m.chem.push(k);ki.add(k.id)}});m.chem=m.chem.filter(k=>!gone.has(k.id));m.chemGone=[...gone];
   return m;
 }
 const isSeedItem={row:r=>r.id>=1&&r.id<=5&&["ข้าวผัดหมู","กะเพราหมูสับ"].includes(r.p),prod:x=>/^ตัวอย่าง/.test(x.note||"")&&["ข้าวผัดหมู","กะเพราหมูสับ"].includes(x.name)};
@@ -341,7 +347,7 @@ const fac=(u,t)=>{u=(u||"").trim().toLowerCase().replace(/[.\s]/g,"");const m=t.
 const grams=r=>{const f=fac(r.u,WU);return f==null?null:result(r)*f};
 const mls=r=>{const f=fac(r.u,VU);return f==null?null:result(r)*f};
 let undoStack=[];
-const snap=()=>{backup("ก่อนลบ/ล้าง");undoStack.push(JSON.stringify({cols,rows,products,chem}));if(undoStack.length>20)undoStack.shift()};
+const snap=()=>{backup("ก่อนลบ/ล้าง");undoStack.push(JSON.stringify({cols,rows,products,chem,chemGone}));if(undoStack.length>20)undoStack.shift()};
 let showTemps=true;try{showTemps=localStorage.getItem("calcMaterials.showTemps")!=="0"}catch(e){}
 let showDates=true;try{showDates=localStorage.getItem("calcMaterials.showDates")!=="0"}catch(e){}
 const chemN=()=>showChem?chem.length:0;
@@ -490,6 +496,11 @@ $("rows").addEventListener("input",e=>{
   else if(t.dataset.kt){const v=num(t.value);r.ct=r.ct||{};if(v===undefined)delete r.ct[t.dataset.kt];else r.ct[t.dataset.kt]=v}
   save();refresh();
 });
+function askDelChem(kd){
+  const k=chem.find(z=>z.id===kd);if(!k)return;
+  const n=rows.filter(r=>(r.c||{})[kd]!==undefined).length+products.filter(x=>(x.meas||{})[kd]!==undefined).length;
+  pending=()=>{snap();chem=chem.filter(z=>z.id!==kd);if(!chemGone.includes(kd))chemGone.push(kd);rows.forEach(r=>{if(r.c)delete r.c[kd];if(r.ct)delete r.ct[kd]});products.forEach(x=>{if(x.meas)delete x.meas[kd];if(x.mt)delete x.mt[kd]});save();drawTable();if(!$("kpanel").hidden)fillK()};
+  note(`ลบช่อง "${k.n}"${n?` และค่าที่กรอกไว้ ${n} ค่า`:""} ใช่ไหม (เลิกทำได้)`,true)}
 $("head").addEventListener("input",e=>{
   const t=e.target;
   if(t.dataset.kn||t.dataset.ku){const k=chem.find(z=>z.id===(t.dataset.kn||t.dataset.ku));if(t.dataset.kn)k.n=t.value;else k.u=t.value;save();return}
@@ -503,8 +514,7 @@ $("head").addEventListener("change",e=>{
   const id=e.target.dataset.co;if(!id)return;const c=cols.find(x=>x.id===id);c.op=e.target.value;c.d=OPS[c.op].d;save();drawTable()});
 $("head").addEventListener("click",e=>{
   const kd=e.target.dataset.kdel;
-  if(kd){const k=chem.find(z=>z.id===kd);pending=()=>{snap();chem=chem.filter(z=>z.id!==kd);rows.forEach(r=>{if(r.c)delete r.c[kd];if(r.ct)delete r.ct[kd]});products.forEach(x=>{if(x.meas)delete x.meas[kd];if(x.mt)delete x.mt[kd]});save();drawTable()};
-    note(`ลบช่อง "${k.n}" และค่าที่กรอกไว้ในช่องนี้ทั้งหมดใช่ไหม (เลิกทำได้)`,true);return}
+  if(kd){askDelChem(kd);return}
   const id=e.target.dataset.cdel;if(!id)return;
   const c=cols.find(x=>x.id===id);
   pending=()=>{snap();cols=cols.filter(x=>x.id!==id);rows.forEach(r=>delete r.m[id]);save();drawTable()};
@@ -528,7 +538,7 @@ $("rows").addEventListener("click",e=>{const id=e.target.dataset.ins;if(!id)retu
 $("head").addEventListener("click",e=>{const id=e.target.dataset.cins;if(!id)return;
   const i=cols.findIndex(c=>c.id===id);cols.splice(i,0,newCol($("newOp").value));save();drawTable()});
 $("expBk").onclick=async()=>{
-  const data=JSON.stringify({app:"calcMaterials",version:1,exported:Date.now(),cols,rows,products,chem,chemVer,showDone,backups:backups.slice(0,10)},null,1);
+  const data=JSON.stringify({app:"calcMaterials",version:1,exported:Date.now(),cols,rows,products,chem,chemVer,chemGone,showDone,backups:backups.slice(0,10)},null,1);
   await saveFile(`สำรองสูตร_${stamp()}.json`,data)};
 $("impBk").onclick=()=>$("impFile").click();
 $("impFile").onchange=e=>{
@@ -538,12 +548,18 @@ $("impFile").onchange=e=>{
     const o=JSON.parse(rd.result);if(o.app!=="calcMaterials"||!Array.isArray(o.rows))throw 0;
     backup("ก่อนนำเข้าไฟล์สำรอง");
     const have=new Set(rows.map(r=>r.id)),addN=o.rows.filter(r=>!have.has(r.id)).length;
-    const mg=mergeStates(stateNow(),{cols:o.cols,rows:o.rows,products:o.products,chem:o.chem});adopt(mg,Date.now());
+    const mg=mergeStates(stateNow(),{cols:o.cols,rows:o.rows,products:o.products,chem:o.chem,chemGone:[]});adopt(mg,Date.now());
     (o.backups||[]).forEach(b=>{if(!backups.some(x=>x.t===b.t))backups.push(b)});persistBackups();
     save();psel.clear();drawTable();fillHist();
     note(`นำเข้าแล้ว: เพิ่มสูตร/แถวใหม่ ${addN} แถว (ข้อมูลเดิมไม่ถูกแทนที่)`,false)
   }catch(err){note("ไฟล์นี้ไม่ใช่ไฟล์สำรองของหน้านี้",false)}};
   rd.readAsText(f)};
+function fillK(){
+  $("kRows").innerHTML=chem.length?chem.map(k=>{const n=rows.filter(r=>(r.c||{})[k.id]!==undefined).length+products.filter(x=>(x.meas||{})[k.id]!==undefined).length;
+    return `<tr><td>${esc(k.n)}</td><td>${esc(k.u||"")}</td><td>${k.avg?"ใช่":"ไม่"}</td><td class="n">${n}</td><td><button class="d" data-kp="${k.id}">ลบช่องนี้</button></td></tr>`}).join(""):`<tr><td colspan="5" class="empty">ไม่มีช่องค่าเคมี</td></tr>`}
+$("kpBtn").onclick=()=>{$("kpanel").hidden=!$("kpanel").hidden;if(!$("kpanel").hidden)fillK()};
+$("kpX").onclick=()=>{$("kpanel").hidden=true};
+$("kRows").addEventListener("click",e=>{const id=e.target.dataset.kp;if(id)askDelChem(id)});
 function fillHid(){
   const h=rows.filter(r=>r.done);
   $("hidRows").innerHTML=h.length?h.map(r=>`<tr><td>${esc(r.p||NOP)}</td><td>${esc(r.n)}</td><td class="n">${fq(r.q)} ${esc(r.u||"")}</td><td class="n f">${fq(result(r))} ${esc(r.u||"")}</td><td><button data-hrest="${r.id}">↩ เรียกคืน</button></td></tr>`).join(""):`<tr><td colspan="5" class="empty">ไม่มีรายการที่ซ่อนอยู่</td></tr>`;
@@ -612,7 +628,7 @@ $("ptbl").addEventListener("click",e=>{
   note(`ลบสินค้า "${pn}"${ids.size?` และสูตร ${ids.size} แถว`:""} ใช่ไหม (เลิกทำได้)`,true)});
 $("clearAll").onclick=()=>{pending=()=>{snap();rows=[];cols=[];sel.clear();psel.clear();save();drawTable()};
   note("ล้างแถวสูตรและขั้นคำนวณทั้งหมด ใช่ไหม (ชื่อสินค้ายังอยู่ เลิกทำได้)",true)};
-$("undoDel").onclick=()=>{const t=undoStack.pop();if(!t)return;const o=JSON.parse(t);cols=o.cols;rows=o.rows;products=o.products||products;chem=o.chem||chem;save();drawTable();note("เลิกทำการลบแล้ว",false)};
+$("undoDel").onclick=()=>{const t=undoStack.pop();if(!t)return;const o=JSON.parse(t);cols=o.cols;rows=o.rows;products=o.products||products;chem=o.chem||chem;chemGone=o.chemGone||[];save();drawTable();note("เลิกทำการลบแล้ว",false)};
 $("rows").addEventListener("click",e=>{const n=e.target.dataset.addto;if(n==null)return;
   rows.push({id:uid(),p:n,n:"",q:0,u:"",m:{}});if(psel.size)psel.add(n);save();drawTable();const f=document.querySelectorAll('[data-f="n"]');if(f.length)f[f.length-1].focus()});
 $("pchips").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const n=b.dataset.pc;if(n==="")psel.clear();else psel.has(n)?psel.delete(n):psel.add(n);drawTable()});
